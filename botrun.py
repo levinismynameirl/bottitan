@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 import os
 
 # Load environment variables from .env file
+print("Loading environment variables...")
 load_dotenv()
+print("Environment variables loaded.")
 
 # Get the bot token from the environment variable
 TOKEN = os.getenv("DISCORD_TOKEN")
