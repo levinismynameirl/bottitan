@@ -1,7 +1,8 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import random
 import datetime
+import asyncio
 
 class Misc(commands.Cog):
     def __init__(self, bot):
@@ -32,122 +33,138 @@ class Misc(commands.Cog):
         await ctx.send(f"🪙 The coin landed on: **{result}**")
 
     @commands.command()
-    async def choose(self, ctx, *choices):
-        """Randomly chooses between multiple options."""
-        if not choices:
-            await ctx.send("❌ You need to provide some options to choose from!")
+    async def reminder(self, ctx, time: str, *, reminder: str):
+        """Set a reminder (e.g., !reminder 10m Take a break)."""
+        try:
+            duration = self.parse_duration(time)
+        except ValueError:
+            await ctx.send("❌ Invalid time format. Use `10s`, `5m`, `1h`, etc.")
             return
-        choice = random.choice(choices)
-        await ctx.send(f"🤔 I choose: **{choice}**")
+
+        await ctx.send(f"⏰ Reminder set for {time}. I'll remind you to: {reminder}")
+        await asyncio.sleep(duration)
+        await ctx.send(f"🔔 {ctx.author.mention}, reminder: {reminder}")
+
+    def parse_duration(self, time_str):
+        """Parse a duration string into seconds."""
+        unit_multipliers = {"s": 1, "m": 60, "h": 3600}
+        unit = time_str[-1]
+        value = int(time_str[:-1])
+        return value * unit_multipliers[unit]
 
     @commands.command()
-    async def avatar(self, ctx, member: discord.Member = None):
-        """Displays the avatar of a user."""
-        member = member or ctx.author
-        await ctx.send(f"🖼️ {member.mention}'s avatar: {member.avatar.url}")
+    async def trivia(self, ctx):
+        """Start a trivia game."""
+        questions = [
+            {
+                "question": "What is the capital of France?",
+                "options": ["1. Paris", "2. London", "3. Berlin", "4. Madrid"],
+                "answer": "1"
+            },
+            {
+                "question": "Who wrote 'To Kill a Mockingbird'?",
+                "options": ["1. Harper Lee", "2. J.K. Rowling", "3. Ernest Hemingway", "4. Mark Twain"],
+                "answer": "1"
+            },
+            {
+                "question": "What is the largest planet in our solar system?",
+                "options": ["1. Earth", "2. Mars", "3. Jupiter", "4. Saturn"],
+                "answer": "3"
+            },
+            {
+                "question": "What year did World War II end?",
+                "options": ["1. 1942", "2. 1945", "3. 1948", "4. 1950"],
+                "answer": "2"
+            },
+            {
+                "question": "What is the chemical symbol for water?",
+                "options": ["1. H2O", "2. CO2", "3. O2", "4. NaCl"],
+                "answer": "1"
+            }
+        ]
 
-    @commands.command()
-    async def serverinfo(self, ctx):
-        """Displays information about the server."""
-        guild = ctx.guild
+        question = random.choice(questions)
         embed = discord.Embed(
-            title=f"Server Info: {guild.name}",
+            title="Trivia Time!",
+            description=f"{question['question']}\n\n" + "\n".join(question["options"]),
             color=discord.Color.blue()
         )
-        embed.add_field(name="Owner", value=guild.owner, inline=False)
-        embed.add_field(name="Members", value=guild.member_count, inline=False)
-        embed.add_field(name="Created On", value=guild.created_at.strftime("%B %d, %Y"), inline=False)
-        embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
         await ctx.send(embed=embed)
 
-    @commands.command()
-    async def userinfo(self, ctx, member: discord.Member = None):
-        """Displays information about a user."""
-        member = member or ctx.author
-        embed = discord.Embed(
-            title=f"User Info: {member.name}",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="ID", value=member.id, inline=False)
-        embed.add_field(name="Joined Server", value=member.joined_at.strftime("%B %d, %Y"), inline=False)
-        embed.add_field(name="Account Created", value=member.created_at.strftime("%B %d, %Y"), inline=False)
-        embed.set_thumbnail(url=member.avatar.url)
-        await ctx.send(embed=embed)
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel
+
+        try:
+            answer = await self.bot.wait_for("message", timeout=30.0, check=check)
+            if answer.content == question["answer"]:
+                await ctx.send("🎉 Correct!")
+            else:
+                await ctx.send(f"❌ Wrong! The correct answer was {question['answer']}.")
+        except asyncio.TimeoutError:
+            await ctx.send("⏰ Time's up! You didn't answer in time.")
 
     @commands.command()
-    async def dadjoke(self, ctx):
-        """Sends a random dad joke."""
-        jokes = [
-            "Why don't skeletons fight each other? They don't have the guts.",
-            "What do you call fake spaghetti? An impasta.",
-            "How do you organize a space party? You planet.",
-            "Did you hear about the kidnapping at the park? They woke up.",
-            "I'm reading a book on anti-gravity. It's impossible to put down.",
-            "I'm on a seafood diet. I see food and I eat it.",
-            "Why don't eggs tell jokes? They might crack up.",
-            "I only know 25 letters of the alphabet. I don't know y.",
-            "I used to be a baker, but I couldn't make enough dough.",
-            "Why don't scientists trust atoms? Because they make up everything.",
-            "What did the buffalo say when his son left? Bison.",
-            "Why did the scarecrow win an award? Because he was outstanding in his field.",
-            "What do you call a bear with no teeth? A gummy bear.",
-            "Parallel lines have so much in common. It’s a shame they’ll never meet.",
-            "Why don't eggs tell jokes? They might crack up."
-        ]
-        await ctx.send(f"😂 {random.choice(jokes)}")
+    async def guess(self, ctx):
+        """Play a number guessing game."""
+        number = random.randint(1, 100)
+        await ctx.send("🎲 I'm thinking of a number between 1 and 100. Can you guess it?")
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
+
+        while True:
+            try:
+                guess = await self.bot.wait_for("message", timeout=30.0, check=check)
+                guess = int(guess.content)
+                if guess < number:
+                    await ctx.send("🔼 Higher!")
+                elif guess > number:
+                    await ctx.send("🔽 Lower!")
+                else:
+                    await ctx.send(f"🎉 Correct! The number was {number}.")
+                    break
+            except asyncio.TimeoutError:
+                await ctx.send(f"⏰ Time's up! The number was {number}.")
+                break
 
     @commands.command()
-    async def fact(self, ctx):
-        """Sends a random fun fact."""
-        facts = [
-            "Honey never spoils. Archaeologists have found pots of honey in ancient Egyptian tombs that are over 3,000 years old and still edible!",
-            "Octopuses have three hearts.",
-            "Bananas are berries, but strawberries aren't.",
-            "A group of flamingos is called a 'flamboyance'."
-        ]
-        await ctx.send(f"📚 Fun Fact: {random.choice(facts)}")
+    async def dice_duel(self, ctx, opponent: discord.Member):
+        """Challenge another user to a dice duel."""
+        await ctx.send(f"🎲 {ctx.author.mention} challenges {opponent.mention} to a dice duel!")
 
-    @commands.command()
-    async def reverse(self, ctx, *, text: str):
-        """Reverses the given text."""
-        reversed_text = text[::-1]
-        await ctx.send(f"🔄 {reversed_text}")
+        player_roll = random.randint(1, 6)
+        opponent_roll = random.randint(1, 6)
 
-    @commands.command()
-    async def say(self, ctx, *, message: str):
-        """Repeats the user's message."""
-        await ctx.send(message)
+        await ctx.send(f"{ctx.author.mention} rolled a {player_roll}.")
+        await ctx.send(f"{opponent.mention} rolled a {opponent_roll}.")
 
-    @commands.command()
-    async def time(self, ctx):
-        """Displays the current time."""
-        now = datetime.datetime.now()
-        await ctx.send(f"🕒 The current time is: {now.strftime('%H:%M:%S')}")
-
-    @commands.command()
-    async def rps(self, ctx, choice: str):
-        """Play Rock, Paper, Scissors with the bot."""
-        choices = ["rock", "paper", "scissors"]
-        if choice.lower() not in choices:
-            await ctx.send("❌ Please choose rock, paper, or scissors.")
-            return
-        bot_choice = random.choice(choices)
-        result = None
-        if choice.lower() == bot_choice:
-            result = "It's a tie!"
-        elif (choice.lower() == "rock" and bot_choice == "scissors") or \
-             (choice.lower() == "paper" and bot_choice == "rock") or \
-             (choice.lower() == "scissors" and bot_choice == "paper"):
-            result = "You win!"
+        if player_roll > opponent_roll:
+            await ctx.send(f"🎉 {ctx.author.mention} wins!")
+        elif player_roll < opponent_roll:
+            await ctx.send(f"🎉 {opponent.mention} wins!")
         else:
-            result = "I win!"
-        await ctx.send(f"🤖 I chose {bot_choice}. {result}")
+            await ctx.send("🤝 It's a tie!")
 
     @commands.command()
-    async def rate(self, ctx, *, thing: str):
-        """Rates something out of 10."""
-        rating = random.randint(1, 10)
-        await ctx.send(f"🤔 I rate **{thing}** a **{rating}/10**!")
+    async def scramble(self, ctx):
+        """Play a word scramble game."""
+        words = ["python", "discord", "bot", "programming", "developer"]
+        word = random.choice(words)
+        scrambled = "".join(random.sample(word, len(word)))
+
+        await ctx.send(f"🔤 Unscramble this word: **{scrambled}**")
+
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel
+
+        try:
+            answer = await self.bot.wait_for("message", timeout=30.0, check=check)
+            if answer.content.lower() == word:
+                await ctx.send("🎉 Correct!")
+            else:
+                await ctx.send(f"❌ Wrong! The correct word was **{word}**.")
+        except asyncio.TimeoutError:
+            await ctx.send(f"⏰ Time's up! The correct word was **{word}**.")
 
 async def setup(bot):
     await bot.add_cog(Misc(bot))

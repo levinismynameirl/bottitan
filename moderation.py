@@ -20,7 +20,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(manage_channels=True)
     async def test(self, ctx):
         """A simple test command that replies with 'Test Ran'"""
-        await ctx.send("Test Ran")
+        await ctx.send(f"Test Ran")
 
     @commands.command()
     @commands.has_permissions(manage_channels=True)
