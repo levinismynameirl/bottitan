@@ -1,0 +1,7 @@
+discord.py
+python-dotenv
+numpy
+pandas
+scikit-learn
+requests
+aiohttp
