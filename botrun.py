@@ -25,7 +25,7 @@ async def load_extensions():
     """Loads all extensions (cogs) before running the bot."""
     await bot.load_extension("moderation")  # Load the Moderation cog
     await bot.load_extension("ranking")  # Load the Ranking cog
-
+    await bot.load_extension("misc")  # Load the Misc cog
 # Event when the bot is ready
 @bot.event
 async def on_ready():
