@@ -56,11 +56,13 @@ class ShiftView(View):
         self.paused = False
 
     async def update_embed(self, interaction):
+        """Update the embed with the current elapsed time."""
         elapsed_time = datetime.now() - self.start_time
-        minutes = elapsed_time.total_seconds() // 60
+        minutes = int(elapsed_time.total_seconds() // 60)
+
         embed = discord.Embed(
             title="Shift Logging",
-            description=f"**Elapsed Time:** {int(minutes)} minutes\n"
+            description=f"**Elapsed Time:** {minutes} minutes\n"
                         f"**Status:** {'Paused' if self.paused else 'Active'}",
             color=discord.Color.blue()
         )
@@ -87,11 +89,22 @@ class ShiftView(View):
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("You cannot control this shift.", ephemeral=True)
             return
+
+        # Calculate the total elapsed time
+        elapsed_time = datetime.now() - self.start_time
+        minutes = int(elapsed_time.total_seconds() // 60)
+
+        # Update the user's points in the database
+        await update_user_points(self.user_id, minutes, minutes)
+
+        # Disable all buttons
         for child in self.children:
-            child.disabled = True  # Disable all buttons
+            child.disabled = True
         await interaction.message.edit(view=self)
+
         await interaction.response.send_message(
-            "✅ Shift stopped. Remember to store all recordings of your shifts, as you may be asked for them at any time.",
+            f"✅ Shift stopped. You earned {minutes} points.\n"
+            "⚠️ **Important:** You must store all recordings of your shifts, as you may be asked for them at any time.",
             ephemeral=True
         )
         self.stop()
@@ -202,8 +215,14 @@ class Ranking(commands.Cog):
             await ctx.send("❌ You must add at least 1 point.")
             return
 
+        # Update the user's points in the database
         await update_user_points(member.id, points_to_add, 0)
-        await ctx.send(f"✅ Added {points_to_add} points to {member.mention}.")
+
+        # Fetch the updated points to confirm the change
+        user_points = await get_user_points(member.id)
+        total_points = user_points["points"]
+
+        await ctx.send(f"✅ Added {points_to_add} points to {member.mention}. Total points: {total_points}.")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
