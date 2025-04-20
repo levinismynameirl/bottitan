@@ -27,6 +27,7 @@ async def load_extensions():
     await bot.load_extension("ranking")  # Load the Ranking cog
     await bot.load_extension("misc")  # Load the Misc cog
     await bot.load_extension("antiraid")  # Load the AntiRaid cog
+    await bot.load_extension("automod")  # Load the AutoMod cog
 
 # Event when the bot is ready
 @bot.event
