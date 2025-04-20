@@ -148,7 +148,7 @@ class Misc(commands.Cog):
     @commands.command()
     async def scramble(self, ctx):
         """Play a word scramble game."""
-        words = ["python", "discord", "bot", "programming", "developer"]
+        words = ["python", "discord", "bot", "programming", "developer", "apple", "snake", "banana" "orange"] 
         word = random.choice(words)
         scrambled = "".join(random.sample(word, len(word)))
 

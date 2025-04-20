@@ -12,9 +12,158 @@ ROLE_ID_UNOFFICIAL_PERSONNEL = 1303661603006447736
 ROLE_ID_LOA = 1313895372828967054  # LOA role
 ROLE_ID_LOA_CHECKER = 1359948180745093161  # LOA Checker role
 
+AUDIT_LOG_CHANNEL_ID = 1303811999146315806  # Replace with your audit log channel ID
+
 class Moderation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message):
+        """Log deleted messages."""
+        if message.author.bot:
+            return  # Ignore bot messages
+
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            embed = discord.Embed(
+                title="Message Deleted",
+                description=f"**Author:** {message.author.mention}\n"
+                            f"**Channel:** {message.channel.mention}\n"
+                            f"**Content:** {message.content}",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_footer(text=f"User ID: {message.author.id}")
+            await audit_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before, after):
+        """Log edited messages."""
+        if before.author.bot:
+            return  # Ignore bot messages
+
+        if before.content == after.content:
+            return  # Ignore edits that don't change the content
+
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            embed = discord.Embed(
+                title="Message Edited",
+                description=f"**Author:** {before.author.mention}\n"
+                            f"**Channel:** {before.channel.mention}",
+                color=discord.Color.orange(),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.add_field(name="Before", value=before.content or "*No content*", inline=False)
+            embed.add_field(name="After", value=after.content or "*No content*", inline=False)
+            embed.set_footer(text=f"User ID: {before.author.id}")
+            await audit_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_member_ban(self, guild, user):
+        """Log member bans."""
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            embed = discord.Embed(
+                title="Member Banned",
+                description=f"**User:** {user.mention}\n**User ID:** {user.id}",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            await audit_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_member_unban(self, guild, user):
+        """Log member unbans."""
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            embed = discord.Embed(
+                title="Member Unbanned",
+                description=f"**User:** {user.mention}\n**User ID:** {user.id}",
+                color=discord.Color.green(),
+                timestamp=discord.utils.utcnow()
+            )
+            await audit_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before, after):
+        """Log role changes or nickname updates."""
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            if before.nick != after.nick:
+                embed = discord.Embed(
+                    title="Nickname Changed",
+                    description=f"**User:** {before.mention}",
+                    color=discord.Color.blue(),
+                    timestamp=discord.utils.utcnow()
+                )
+                embed.add_field(name="Before", value=before.nick or "*No nickname*", inline=False)
+                embed.add_field(name="After", value=after.nick or "*No nickname*", inline=False)
+                embed.set_footer(text=f"User ID: {before.id}")
+                await audit_channel.send(embed=embed)
+
+            if before.roles != after.roles:
+                added_roles = [role.mention for role in after.roles if role not in before.roles]
+                removed_roles = [role.mention for role in before.roles if role not in after.roles]
+
+                embed = discord.Embed(
+                    title="Roles Updated",
+                    description=f"**User:** {before.mention}",
+                    color=discord.Color.purple(),
+                    timestamp=discord.utils.utcnow()
+                )
+                if added_roles:
+                    embed.add_field(name="Roles Added", value=", ".join(added_roles), inline=False)
+                if removed_roles:
+                    embed.add_field(name="Roles Removed", value=", ".join(removed_roles), inline=False)
+                embed.set_footer(text=f"User ID: {before.id}")
+                await audit_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel):
+        """Log channel creation."""
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            embed = discord.Embed(
+                title="Channel Created",
+                description=f"**Channel:** {channel.mention}\n**Channel Name:** {channel.name}",
+                color=discord.Color.green(),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_footer(text=f"Channel ID: {channel.id}")
+            await audit_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel):
+        """Log channel deletion."""
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            embed = discord.Embed(
+                title="Channel Deleted",
+                description=f"**Channel Name:** {channel.name}",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_footer(text=f"Channel ID: {channel.id}")
+            await audit_channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before, after):
+        """Log channel updates."""
+        audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
+        if audit_channel:
+            embed = discord.Embed(
+                title="Channel Updated",
+                description=f"**Channel:** {before.mention}",
+                color=discord.Color.orange(),
+                timestamp=discord.utils.utcnow()
+            )
+            if before.name != after.name:
+                embed.add_field(name="Name Before", value=before.name, inline=False)
+                embed.add_field(name="Name After", value=after.name, inline=False)
+            embed.set_footer(text=f"Channel ID: {before.id}")
+            await audit_channel.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(manage_channels=True)

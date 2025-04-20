@@ -3,6 +3,7 @@ import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
 import os
+from ranking import initialize_database
 
 # Load environment variables from .env file
 print("Loading environment variables...")
@@ -32,6 +33,7 @@ async def load_extensions():
 # Event when the bot is ready
 @bot.event
 async def on_ready():
+    await initialize_database()  # Initialize the PostgreSQL database
     print(f"✅ Logged in as {bot.user}")
 
 # Main entry point to run the bot

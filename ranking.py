@@ -1,6 +1,6 @@
 import discord
 import asyncio
-import json
+import asyncpg
 from discord.ext import commands
 from discord.ui import View, Button
 from discord import Interaction
@@ -13,21 +13,39 @@ ROLE_ID_AWAITING_TRYOUT = 1303662669626081300  # Awaiting Tryout role
 ROLE_ID_UNOFFICIAL_PERSONNEL = 1303661603006447736  # Unofficial Personnel role
 ROLE_ID_JUNIOR_PERSONNEL = 1303659781013241889  # Junior Personnel role
 
-# Persistent storage for points
-POINTS_FILE = "points.json"
+# PostgreSQL connection string
+DATABASE_URL = "postgresql://postgres:jAHFxyiZVaVQAujHMPOLBtlMHZTbllTa@postgres.railway.internal:5432/railway"
 
-# Load points from file
-def load_points():
-    try:
-        with open(POINTS_FILE, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+async def initialize_database():
+    """Initialize the database and create the points table if it doesn't exist."""
+    conn = await asyncpg.connect(DATABASE_URL)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS points (
+            user_id TEXT PRIMARY KEY,
+            points INTEGER DEFAULT 0,
+            time INTEGER DEFAULT 0
+        )
+    """)
+    await conn.close()
 
-# Save points to file
-def save_points(points):
-    with open(POINTS_FILE, "w") as f:
-        json.dump(points, f)
+async def get_user_points(user_id):
+    """Get a user's points and time from the database."""
+    conn = await asyncpg.connect(DATABASE_URL)
+    row = await conn.fetchrow("SELECT points, time FROM points WHERE user_id = $1", str(user_id))
+    await conn.close()
+    return {"points": row["points"], "time": row["time"]} if row else {"points": 0, "time": 0}
+
+async def update_user_points(user_id, points, time):
+    """Update a user's points and time in the database."""
+    conn = await asyncpg.connect(DATABASE_URL)
+    await conn.execute("""
+        INSERT INTO points (user_id, points, time)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id) DO UPDATE SET
+            points = points + $2,
+            time = time + $3
+    """, str(user_id), points, time)
+    await conn.close()
 
 class ShiftView(View):
     def __init__(self, bot, user_id, start_time):
@@ -84,63 +102,9 @@ class Ranking(commands.Cog):
         self.active_shifts = {}
 
     @commands.command()
-    @commands.has_permissions(manage_roles=True)
-    async def rank(self, ctx, action: str = None, member: discord.Member = None):
-        """Ranks a member using: !rank entree @user"""
-        if action != "entree" or member is None:
-            await ctx.send("Usage: `!rank entree @user`")
-            return
-
-        # Prompt for Roblox username
-        await ctx.send("Please provide the Roblox username of the person being ranked:")
-        try:
-            roblox_message = await self.bot.wait_for(
-                "message",
-                timeout=30.0,
-                check=lambda m: m.author == ctx.author and m.channel == ctx.channel,
-            )
-            roblox_username = roblox_message.content
-        except asyncio.TimeoutError:
-            await ctx.send("❌ You took too long to respond. Command canceled.")
-            return
-
-        # Grab the roles from the guild
-        role_recruit = ctx.guild.get_role(ROLE_ID_RECRUIT)
-        role_official = ctx.guild.get_role(ROLE_ID_OFFICIAL_MEMBER)
-        role_senior_personnel = ctx.guild.get_role(ROLE_ID_SENIOR_PERSONNEL)
-        role_awaiting = ctx.guild.get_role(ROLE_ID_AWAITING_TRYOUT)
-        role_unofficial = ctx.guild.get_role(ROLE_ID_UNOFFICIAL_PERSONNEL)
-
-        # Apply the roles
-        await member.add_roles(role_recruit, role_official, role_senior_personnel)
-        await member.remove_roles(role_awaiting, role_unofficial)
-
-        # Send confirmation message
-        await ctx.send(f"✅ {member.mention} has been ranked successfully.")
-
-        # Log the ranking in a specific channel
-        log_channel_id = 1317200253170090014  # Replace with your logging channel ID
-        log_channel = ctx.guild.get_channel(log_channel_id)
-        if log_channel:
-            embed = discord.Embed(
-                title="Ranking Log",
-                color=discord.Color.green(),
-                description=(
-                    f"**Discord Username:** {member.mention}\n"
-                    f"**Roblox Username:** {roblox_username}\n"
-                    f"**Old Rank:** Awaiting Tryout / Unofficial Personnel\n"
-                    f"**New Rank:** Recruit / Official Member / Junior Personnel\n"
-                    f"**Ranked By:** {ctx.author.mention}\n"
-                    f"**Proof:** [Jump to Command](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id})"
-                ),
-            )
-            await log_channel.send(embed=embed)
-
-    @commands.command()
     async def startshift(self, ctx):
         """Start a shift."""
-        points = load_points()
-        user_points = points.get(str(ctx.author.id), {"points": 0, "time": 0})
+        user_points = await get_user_points(ctx.author.id)
         total_points = user_points["points"]
         total_time = user_points["time"]
 
@@ -204,12 +168,7 @@ class Ranking(commands.Cog):
         elapsed_time = datetime.now() - start_time
         minutes = int(elapsed_time.total_seconds() // 60)
 
-        points = load_points()
-        user_points = points.get(str(ctx.author.id), {"points": 0, "time": 0})
-        user_points["points"] += minutes
-        user_points["time"] += minutes
-        points[str(ctx.author.id)] = user_points
-        save_points(points)
+        await update_user_points(ctx.author.id, minutes, minutes)
 
         await ctx.send(
             f"✅ Shift stopped. You earned {minutes} points.\n"
@@ -220,8 +179,7 @@ class Ranking(commands.Cog):
     async def points(self, ctx, member: discord.Member = None):
         """Shows how many points a user has (leave blank for self)."""
         member = member or ctx.author  # Default to the command author if no member is mentioned
-        points = load_points()
-        user_points = points.get(str(member.id), {"points": 0, "time": 0})
+        user_points = await get_user_points(member.id)
         total_points = user_points["points"]
         total_time = user_points["time"]
 
@@ -244,12 +202,7 @@ class Ranking(commands.Cog):
             await ctx.send("❌ You must add at least 1 point.")
             return
 
-        points = load_points()
-        user_points = points.get(str(member.id), {"points": 0, "time": 0})
-        user_points["points"] += points_to_add
-        points[str(member.id)] = user_points
-        save_points(points)
-
+        await update_user_points(member.id, points_to_add, 0)
         await ctx.send(f"✅ Added {points_to_add} points to {member.mention}.")
 
     @commands.command()
@@ -260,49 +213,37 @@ class Ranking(commands.Cog):
             await ctx.send("❌ You must remove at least 1 point.")
             return
 
-        points = load_points()
-        user_points = points.get(str(member.id), {"points": 0, "time": 0})
-
+        user_points = await get_user_points(member.id)
         if user_points["points"] < points_to_remove:
             await ctx.send(f"❌ {member.mention} does not have enough points to remove.")
             return
 
-        # Ask for confirmation
+        await update_user_points(member.id, -points_to_remove, 0)
+        await ctx.send(f"✅ Removed {points_to_remove} points from {member.mention}.")
+
+    @commands.command()
+    async def leaderboard(self, ctx):
+        """Display the top 10 users with the most points."""
+        conn = await asyncpg.connect(DATABASE_URL)
+        rows = await conn.fetch("SELECT user_id, points FROM points ORDER BY points DESC LIMIT 10")
+        await conn.close()
+
+        if not rows:
+            await ctx.send("❌ No points have been recorded yet.")
+            return
+
         embed = discord.Embed(
-            title="Confirmation Required",
-            description=(
-                f"Are you sure you want to remove {points_to_remove} points from {member.mention}?\n"
-                f"**Current Points:** {user_points['points']}"
-            ),
-            color=discord.Color.orange()
+            title="🏆 Leaderboard",
+            description="Top 10 users with the most points:",
+            color=discord.Color.gold()
         )
-        view = View()
-        confirm_button = Button(label="Yes", style=discord.ButtonStyle.green)
-        cancel_button = Button(label="No", style=discord.ButtonStyle.red)
 
-        async def confirm_callback(interaction: Interaction):
-            if interaction.user != ctx.author:
-                await interaction.response.send_message("This is not your confirmation.", ephemeral=True)
-                return
-            user_points["points"] -= points_to_remove
-            points[str(member.id)] = user_points
-            save_points(points)
-            await ctx.send(f"✅ Removed {points_to_remove} points from {member.mention}.")
-            view.stop()
+        for rank, row in enumerate(rows, start=1):
+            user = self.bot.get_user(int(row["user_id"]))
+            user_name = user.name if user else f"Unknown User ({row['user_id']})"
+            embed.add_field(name=f"#{rank}: {user_name}", value=f"{row['points']} points", inline=False)
 
-        async def cancel_callback(interaction: Interaction):
-            if interaction.user != ctx.author:
-                await interaction.response.send_message("This is not your confirmation.", ephemeral=True)
-                return
-            await ctx.send("❌ Point removal canceled.")
-            view.stop()
-
-        confirm_button.callback = confirm_callback
-        cancel_button.callback = cancel_callback
-        view.add_item(confirm_button)
-        view.add_item(cancel_button)
-
-        await ctx.send(embed=embed, view=view)
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Ranking(bot))
