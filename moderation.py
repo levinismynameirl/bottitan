@@ -163,5 +163,78 @@ class Moderation(commands.Cog):
             else:
                 await confirmation_message.edit(content="❌ Clear command canceled.", embed=None, view=None)
 
+    @commands.command()
+    async def loa(self, ctx, reason: str, time_in_days: int):
+        """Request a Leave of Absence (LOA)."""
+        # Check if the user has the Official Member role
+        official_member_role = ctx.guild.get_role(ROLE_ID_OFFICIAL_MEMBER)
+        if official_member_role not in ctx.author.roles:
+            await ctx.send("❌ You must have the Official Member role to request an LOA.")
+            return
+
+        # Get the specific user by ID
+        admin_id = 920314437179674694  # Replace with the specific user ID
+        try:
+            admin = await self.bot.fetch_user(admin_id)  # Fetch the user directly
+        except discord.NotFound:
+            await ctx.send("❌ The designated administrator could not be found.")
+            return
+
+        # Send a DM to the designated administrator
+        embed = discord.Embed(
+            title="LOA Request",
+            description=f"**Requester:** {ctx.author.mention}\n"
+                        f"**Reason:** {reason}\n"
+                        f"**Time (days):** {time_in_days}",
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text="React with ✅ to approve or ❌ to decline.")
+
+        try:
+            message = await admin.send(embed=embed)
+        except discord.Forbidden:
+            await ctx.send(f"❌ Could not DM the designated administrator ({admin.mention}).")
+            return
+
+        # Add reactions to the message
+        await message.add_reaction("✅")
+        await message.add_reaction("❌")
+
+        # Wait for the administrator's reaction
+        def check(reaction, user):
+            return (
+                user == admin
+                and str(reaction.emoji) in ["✅", "❌"]
+                and reaction.message.id == message.id
+            )
+
+        try:
+            reaction, user = await self.bot.wait_for("reaction_add", timeout=86400.0, check=check)
+        except asyncio.TimeoutError:
+            await admin.send("❌ You did not respond to the LOA request in time.")
+            return
+
+        if str(reaction.emoji) == "✅":
+            # Approve the LOA
+            loa_role = ctx.guild.get_role(ROLE_ID_LOA)
+            await ctx.author.add_roles(loa_role)
+            await ctx.author.send(f"✅ Your LOA request has been approved for {time_in_days} days.")
+            await admin.send("✅ You have approved the LOA request.")
+        elif str(reaction.emoji) == "❌":
+            # Decline the LOA
+            await admin.send("❌ Please reply with the reason for declining the LOA request.")
+
+            def message_check(m):
+                return m.author == admin and m.channel == message.channel
+
+            try:
+                decline_reason = await self.bot.wait_for("message", timeout=86400.0, check=message_check)
+            except asyncio.TimeoutError:
+                await admin.send("❌ You did not provide a reason for declining the LOA request in time.")
+                return
+
+            await ctx.author.send(f"❌ Your LOA request has been declined.\n**Reason:** {decline_reason.content}")
+            await admin.send("❌ You have declined the LOA request.")
+
 async def setup(bot):
     await bot.add_cog(Moderation(bot))

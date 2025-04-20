@@ -15,6 +15,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 # Enable required intents
 intents = discord.Intents.default()
 intents.message_content = True  # Required for message commands
+intents.members = True  # Required to fetch members
 
 # Create bot instance
 bot = commands.Bot(command_prefix="!", intents=intents)

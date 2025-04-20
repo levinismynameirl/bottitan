@@ -11,7 +11,7 @@ ROLE_ID_RECRUIT = 1303660480480673812     # Recruit role
 ROLE_ID_OFFICIAL_MEMBER = 1346557689303662633  # Official Member role
 ROLE_ID_AWAITING_TRYOUT = 1303662669626081300  # Awaiting Tryout role
 ROLE_ID_UNOFFICIAL_PERSONNEL = 1303661603006447736  # Unofficial Personnel role
-ROLE_ID_SENIOR_PERSONNEL = 1303657384216100914  # Senior Personnel role
+ROLE_ID_JUNIOR_PERSONNEL = 1303659781013241889  # Junior Personnel role
 
 # Persistent storage for points
 POINTS_FILE = "points.json"
@@ -129,7 +129,7 @@ class Ranking(commands.Cog):
                     f"**Discord Username:** {member.mention}\n"
                     f"**Roblox Username:** {roblox_username}\n"
                     f"**Old Rank:** Awaiting Tryout / Unofficial Personnel\n"
-                    f"**New Rank:** Recruit / Official Member / Senior Personnel\n"
+                    f"**New Rank:** Recruit / Official Member / Junior Personnel\n"
                     f"**Ranked By:** {ctx.author.mention}\n"
                     f"**Proof:** [Jump to Command](https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{ctx.message.id})"
                 ),
