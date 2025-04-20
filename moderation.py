@@ -95,4 +95,73 @@ class Moderation(commands.Cog):
         await ctx.send(f"🔇 {member.mention} has been muted. Reason: {reason}")
 
     @commands.command()
-    @commands
+    @commands.has_permissions(manage_roles=True)
+    async def unmute(self, ctx, member: discord.Member):
+        """Unmutes a member by removing the Muted role."""
+        muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
+        if muted_role in member.roles:
+            await member.remove_roles(muted_role)
+            await ctx.send(f"🔊 {member.mention} has been unmuted.")
+        else:
+            await ctx.send(f"❌ {member.mention} is not muted.")
+
+    @commands.command()
+    @commands.has_permissions(manage_messages=True)
+    async def clear(self, ctx, number: int):
+        """Clears a specified number of messages."""
+        if number < 1 or number > 100:
+            await ctx.send("❌ Please specify a number between 1 and 100.")
+            return
+
+        if number <= 10:
+            # Clear messages directly if the number is 10 or less
+            await ctx.channel.purge(limit=number + 1)  # +1 to include the command message
+            await ctx.send(f"✅ Cleared {number} messages.", delete_after=5)
+        else:
+            # Ask for confirmation if the number is greater than 10
+            embed = discord.Embed(
+                title="Confirmation Required",
+                description=f"Are you sure you want to clear {number} messages?",
+                color=discord.Color.orange()
+            )
+
+            # Create buttons for confirmation
+            class ConfirmView(View):
+                def __init__(self):
+                    super().__init__()
+                    self.value = None
+
+                @discord.ui.button(label="YES", style=discord.ButtonStyle.green)
+                async def confirm(self, interaction: Interaction, button: Button):
+                    if interaction.user == ctx.author:
+                        self.value = True
+                        self.stop()
+                        await interaction.response.defer()
+                    else:
+                        await interaction.response.send_message("You cannot confirm this action.", ephemeral=True)
+
+                @discord.ui.button(label="NO", style=discord.ButtonStyle.red)
+                async def cancel(self, interaction: Interaction, button: Button):
+                    if interaction.user == ctx.author:
+                        self.value = False
+                        self.stop()
+                        await interaction.response.defer()
+                    else:
+                        await interaction.response.send_message("You cannot cancel this action.", ephemeral=True)
+
+            view = ConfirmView()
+            confirmation_message = await ctx.send(embed=embed, view=view)
+
+            # Wait for the user's response
+            await view.wait()
+
+            if view.value is None:
+                await confirmation_message.edit(content="❌ Confirmation timed out.", embed=None, view=None)
+            elif view.value:
+                await ctx.channel.purge(limit=number + 1)  # +1 to include the command message
+                await ctx.send(f"✅ Cleared {number} messages.", delete_after=5)
+            else:
+                await confirmation_message.edit(content="❌ Clear command canceled.", embed=None, view=None)
+
+async def setup(bot):
+    await bot.add_cog(Moderation(bot))

@@ -3,25 +3,9 @@ import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
 import os
-from flask import Flask
-from threading import Thread
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Flask app for keeping the bot alive
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-def run():
-    app.run(host="0.0.0.0", port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
 
 # Get the bot token from the environment variable
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -45,9 +29,6 @@ async def on_ready():
 
 # Main entry point to run the bot
 async def main():
-    # Keep the bot alive with Flask
-    keep_alive()
-
     # Load extensions before starting the bot
     await load_extensions()
 
