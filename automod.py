@@ -28,15 +28,24 @@ class AutoMod(commands.Cog):
         guild = message.guild
         user = message.author
 
-        # Notify admins
+        # Delete the message containing the bad word
+        await message.delete()
+
+        # Get the warning channel
+        warning_channel = self.bot.get_channel(1310173771633791037)  # Replace with your warning channel ID
+        if not warning_channel:
+            print("Warning channel not found. Please check the channel ID.")
+            return
+
+        # Notify admins in the warning channel
         admin_roles = [1303797966657814579, 1303798167799599175]  # Replace with actual role IDs
         admin_mentions = " ".join([role.mention for role in guild.roles if role.id in admin_roles])
 
         embed = discord.Embed(
             title="Bad Word Detected",
             description=(
-                f"User: {user.mention}\n"
-                f"Message: {message.content}\n\n"
+                f"**User:** {user.mention}\n"
+                f"**Message:** {message.content}\n\n"
                 f"Choose an action for this user:\n"
                 f"1️⃣ Mute\n"
                 f"2️⃣ Kick\n"
@@ -46,8 +55,8 @@ class AutoMod(commands.Cog):
         )
         embed.set_footer(text="React with the appropriate emoji to take action.")
 
-        # Send the embed to the channel
-        notification_message = await message.channel.send(admin_mentions, embed=embed)
+        # Send the embed to the warning channel
+        notification_message = await warning_channel.send(admin_mentions, embed=embed)
 
         # Add reaction options
         await notification_message.add_reaction("1️⃣")  # Mute
@@ -64,7 +73,7 @@ class AutoMod(commands.Cog):
         try:
             reaction, admin_user = await self.bot.wait_for("reaction_add", timeout=300.0, check=check)
         except asyncio.TimeoutError:
-            await message.channel.send("❌ No action was taken in time.")
+            await warning_channel.send("❌ No action was taken in time.")
             return
 
         # Handle the selected action

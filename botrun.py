@@ -71,8 +71,9 @@ async def main():
 
 # Run the bot
 print("Running the bot...")
+print("Bot is running.")
+print("-------------------------------")
+print("Bot succesfully started")
 if __name__ == "__main__":
     asyncio.run(main())  # Run the async main function
-    print("Bot is running.")
-    print("-------------------------------")
-print("Bot succesfully started")
+    

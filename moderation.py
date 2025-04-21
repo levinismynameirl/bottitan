@@ -12,7 +12,7 @@ ROLE_ID_UNOFFICIAL_PERSONNEL = 1303661603006447736
 ROLE_ID_LOA = 1313895372828967054  # LOA role
 ROLE_ID_LOA_CHECKER = 1359948180745093161  # LOA Checker role
 
-AUDIT_LOG_CHANNEL_ID = 1303811999146315806  # Replace with your audit log channel ID
+AUDIT_LOG_CHANNEL_ID = 1310173771633791037  # Replace with your audit log channel ID
 
 class Moderation(commands.Cog):
     def __init__(self, bot):
