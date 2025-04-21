@@ -5,6 +5,9 @@ from discord.ext import commands
 from discord.ui import View, Button
 from discord import Interaction
 from datetime import datetime
+import random
+import string
+from captcha.image import ImageCaptcha
 
 # Role IDs
 ROLE_ID_RECRUIT = 1303660480480673812     # Recruit role
@@ -66,7 +69,7 @@ class ShiftView(View):
                         f"**Status:** {'Paused' if self.paused else 'Active'}",
             color=discord.Color.blue()
         )
-        await interaction.message.edit(embed=embed, view=self)
+        await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label="Pause", style=discord.ButtonStyle.red)
     async def pause(self, interaction: Interaction, button: Button):
@@ -100,9 +103,9 @@ class ShiftView(View):
         # Disable all buttons
         for child in self.children:
             child.disabled = True
-        await interaction.message.edit(view=self)
+        await interaction.response.edit_message(view=self)
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"✅ Shift stopped. You earned {minutes} points.\n"
             "⚠️ **Important:** You must store all recordings of your shifts, as you may be asked for them at any time.",
             ephemeral=True
@@ -263,6 +266,6 @@ class Ranking(commands.Cog):
             embed.add_field(name=f"#{rank}: {user_name}", value=f"{row['points']} points", inline=False)
 
         await ctx.send(embed=embed)
-
+        
 async def setup(bot):
     await bot.add_cog(Ranking(bot))

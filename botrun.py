@@ -43,6 +43,8 @@ async def load_extensions():
     await bot.load_extension("misc")  # Load the Misc cog
     await bot.load_extension("antiraid")  # Load the AntiRaid cog
     await bot.load_extension("automod")  # Load the AutoMod cog
+    await bot.load_extension("verification")  # Load the Captcha cog
+    await bot.load_extension("embedsend")  # Load the EmbedSend cog
 print("All files loaded successfully.")
 
 # Event when the bot is ready
@@ -65,9 +67,9 @@ async def main():
     print("Main function executed successfully.")
 
     # Start the bot using its token (using environment variable for safety)
-    print("Fetching token from environment variable...")
+    
     await bot.start(TOKEN)
-    print("Token fetched successfully.")
+    
 
 # Run the bot
 print("Running the bot...")
@@ -76,4 +78,4 @@ print("-------------------------------")
 print("Bot succesfully started")
 if __name__ == "__main__":
     asyncio.run(main())  # Run the async main function
-    
+

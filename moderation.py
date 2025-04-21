@@ -90,35 +90,40 @@ class Moderation(commands.Cog):
     async def on_member_update(self, before, after):
         """Log role changes or nickname updates."""
         audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
-        if audit_channel:
-            if before.nick != after.nick:
-                embed = discord.Embed(
-                    title="Nickname Changed",
-                    description=f"**User:** {before.mention}",
-                    color=discord.Color.blue(),
-                    timestamp=discord.utils.utcnow()
-                )
-                embed.add_field(name="Before", value=before.nick or "*No nickname*", inline=False)
-                embed.add_field(name="After", value=after.nick or "*No nickname*", inline=False)
-                embed.set_footer(text=f"User ID: {before.id}")
-                await audit_channel.send(embed=embed)
+        if not audit_channel:
+            print("Audit log channel not found.")
+            return
 
-            if before.roles != after.roles:
-                added_roles = [role.mention for role in after.roles if role not in before.roles]
-                removed_roles = [role.mention for role in before.roles if role not in after.roles]
+        # Log nickname changes
+        if before.nick != after.nick:
+            embed = discord.Embed(
+                title="Nickname Changed",
+                description=f"**User:** {before.mention}",
+                color=discord.Color.blue(),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.add_field(name="Before", value=before.nick or "*No nickname*", inline=False)
+            embed.add_field(name="After", value=after.nick or "*No nickname*", inline=False)
+            embed.set_footer(text=f"User ID: {before.id}")
+            await audit_channel.send(embed=embed)
 
-                embed = discord.Embed(
-                    title="Roles Updated",
-                    description=f"**User:** {before.mention}",
-                    color=discord.Color.purple(),
-                    timestamp=discord.utils.utcnow()
-                )
-                if added_roles:
-                    embed.add_field(name="Roles Added", value=", ".join(added_roles), inline=False)
-                if removed_roles:
-                    embed.add_field(name="Roles Removed", value=", ".join(removed_roles), inline=False)
-                embed.set_footer(text=f"User ID: {before.id}")
-                await audit_channel.send(embed=embed)
+        # Log role changes
+        if before.roles != after.roles:
+            added_roles = [role.mention for role in after.roles if role not in before.roles]
+            removed_roles = [role.mention for role in before.roles if role not in after.roles]
+
+            embed = discord.Embed(
+                title="Roles Updated",
+                description=f"**User:** {before.mention}",
+                color=discord.Color.purple(),
+                timestamp=discord.utils.utcnow()
+            )
+            if added_roles:
+                embed.add_field(name="Roles Added", value=", ".join(added_roles), inline=False)
+            if removed_roles:
+                embed.add_field(name="Roles Removed", value=", ".join(removed_roles), inline=False)
+            embed.set_footer(text=f"User ID: {before.id}")
+            await audit_channel.send(embed=embed)
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
@@ -152,18 +157,33 @@ class Moderation(commands.Cog):
     async def on_guild_channel_update(self, before, after):
         """Log channel updates."""
         audit_channel = self.bot.get_channel(AUDIT_LOG_CHANNEL_ID)
-        if audit_channel:
-            embed = discord.Embed(
-                title="Channel Updated",
-                description=f"**Channel:** {before.mention}",
-                color=discord.Color.orange(),
-                timestamp=discord.utils.utcnow()
-            )
-            if before.name != after.name:
-                embed.add_field(name="Name Before", value=before.name, inline=False)
-                embed.add_field(name="Name After", value=after.name, inline=False)
-            embed.set_footer(text=f"Channel ID: {before.id}")
-            await audit_channel.send(embed=embed)
+        if not audit_channel:
+            print("Audit log channel not found.")
+            return
+
+        embed = discord.Embed(
+            title="Channel Updated",
+            description=f"**Channel:** {before.mention}",
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+
+        # Log name changes
+        if before.name != after.name:
+            embed.add_field(name="Name Before", value=before.name, inline=False)
+            embed.add_field(name="Name After", value=after.name, inline=False)
+
+        # Log topic changes (for text channels)
+        if isinstance(before, discord.TextChannel) and before.topic != after.topic:
+            embed.add_field(name="Topic Before", value=before.topic or "*No topic*", inline=False)
+            embed.add_field(name="Topic After", value=after.topic or "*No topic*", inline=False)
+
+        # Log permission changes
+        if before.overwrites != after.overwrites:
+            embed.add_field(name="Permissions Changed", value="Channel permissions were updated.", inline=False)
+
+        embed.set_footer(text=f"Channel ID: {before.id}")
+        await audit_channel.send(embed=embed)
 
     @commands.command()
     @commands.has_permissions(manage_channels=True)
