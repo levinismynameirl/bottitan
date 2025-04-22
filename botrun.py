@@ -45,6 +45,7 @@ async def load_extensions():
     await bot.load_extension("automod")  # Load the AutoMod cog
     await bot.load_extension("verification")  # Load the Captcha cog
     await bot.load_extension("embedsend")  # Load the EmbedSend cog
+    await bot.load_extension("stats")  # Load the ServerStats cog
 print("All files loaded successfully.")
 
 # Event when the bot is ready
