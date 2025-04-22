@@ -119,59 +119,98 @@ class Ranking(commands.Cog):
 
     @commands.command()
     async def startshift(self, ctx):
-        """Start a shift."""
+        """Start a shift using reactions in a DM."""
         user_points = await get_user_points(ctx.author.id)
         total_points = user_points["points"]
         total_time = user_points["time"]
 
+        # Send an embed in the server channel
         embed = discord.Embed(
             title="Start Shift",
             description=(
                 f"**Current Points:** {total_points}\n"
                 f"**Total Time on Shifts:** {total_time} minutes\n\n"
-                "Are you sure you want to start a shift?\n"
-                "You must store all recordings of your shifts, as you may be asked for them at any time."
+                "React with ✅ to start your shift or ❌ to cancel.\n"
+                "⚠️ **Important:** You must store all recordings of your shifts, as you may be asked for them at any time."
             ),
             color=discord.Color.orange()
         )
-        view = View()
-        confirm_button = Button(label="Yes", style=discord.ButtonStyle.green)
-        cancel_button = Button(label="No", style=discord.ButtonStyle.red)
+        message = await ctx.send(embed=embed)
 
-        async def confirm_callback(interaction: Interaction):
-            if interaction.user != ctx.author:
-                await interaction.response.send_message("This is not your confirmation.", ephemeral=True)
-                return
-            await interaction.response.defer()
-            start_time = datetime.now()
-            self.active_shifts[ctx.author.id] = start_time
-            dm_channel = await ctx.author.create_dm()
-            shift_view = ShiftView(self.bot, ctx.author.id, start_time)
-            await dm_channel.send(
-                embed=discord.Embed(
-                    title="Shift Started",
-                    description="Your shift has started. Use the buttons below to manage your shift.",
-                    color=discord.Color.green()
-                ),
-                view=shift_view
-            )
-            await ctx.send("✅ Shift started. Check your DMs for details.")
-            view.stop()
+        # Add reactions
+        await message.add_reaction("✅")
+        await message.add_reaction("❌")
 
-        async def cancel_callback(interaction: Interaction):
-            if interaction.user != ctx.author:
-                await interaction.response.send_message("This is not your confirmation.", ephemeral=True)
-                return
-            await interaction.response.defer()
-            await ctx.send("❌ Shift start canceled.")
-            view.stop()
+        def check_reaction(reaction, user):
+            return user == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == message.id
 
-        confirm_button.callback = confirm_callback
-        cancel_button.callback = cancel_callback
-        view.add_item(confirm_button)
-        view.add_item(cancel_button)
+        try:
+            reaction, user = await self.bot.wait_for("reaction_add", timeout=60.0, check=check_reaction)
+            if str(reaction.emoji) == "✅":
+                start_time = datetime.now()
+                self.active_shifts[ctx.author.id] = start_time
 
-        await ctx.send(embed=embed, view=view)
+                # Send a DM to the user
+                try:
+                    dm_channel = await ctx.author.create_dm()
+                    dm_embed = discord.Embed(
+                        title="Shift Started",
+                        description=(
+                            "Your shift has started. Use the reactions below to control your shift:\n"
+                            "⏸️ **Pause**\n"
+                            "▶️ **Resume**\n"
+                            "⏹️ **Stop**"
+                        ),
+                        color=discord.Color.green()
+                    )
+                    dm_message = await dm_channel.send(embed=dm_embed)
+
+                    # Add reactions for pause, resume, and stop
+                    await dm_message.add_reaction("⏸️")
+                    await dm_message.add_reaction("▶️")
+                    await dm_message.add_reaction("⏹️")
+
+                    paused = False
+
+                    def dm_check(reaction, user):
+                        return user == ctx.author and str(reaction.emoji) in ["⏸️", "▶️", "⏹️"] and reaction.message.id == dm_message.id
+
+                    while True:
+                        reaction, user = await self.bot.wait_for("reaction_add", timeout=None, check=dm_check)
+
+                        if str(reaction.emoji) == "⏸️":
+                            if paused:
+                                await dm_channel.send("❌ Your shift is already paused.", delete_after=5)
+                            else:
+                                paused = True
+                                await dm_channel.send("⏸️ Your shift has been paused.", delete_after=5)
+
+                        elif str(reaction.emoji) == "▶️":
+                            if not paused:
+                                await dm_channel.send("❌ Your shift is already active.", delete_after=5)
+                            else:
+                                paused = False
+                                await dm_channel.send("▶️ Your shift has been resumed.", delete_after=5)
+
+                        elif str(reaction.emoji) == "⏹️":
+                            elapsed_time = datetime.now() - start_time
+                            minutes = int(elapsed_time.total_seconds() // 60)
+
+                            # Update the user's points in the database
+                            await update_user_points(ctx.author.id, minutes, minutes)
+
+                            await dm_channel.send(
+                                f"⏹️ Your shift has been stopped. You earned {minutes} points.\n"
+                                "⚠️ **Important:** You must store all recordings of your shifts, as you may be asked for them at any time."
+                            )
+                            break  # Exit the loop when the shift is stopped
+
+                except discord.Forbidden:
+                    await ctx.send("❌ I could not send you a DM. Please enable DMs and try again.")
+            elif str(reaction.emoji) == "❌":
+                await ctx.send("❌ Shift start canceled.")
+        except asyncio.TimeoutError:
+            await ctx.send("❌ You took too long to respond. Shift start canceled.")
 
     @commands.command()
     async def stopshift(self, ctx):
@@ -217,6 +256,9 @@ class Ranking(commands.Cog):
         if points_to_add < 1:
             await ctx.send("❌ You must add at least 1 point.")
             return
+
+        # Debugging message
+        print(f"Adding {points_to_add} points to user {member.id}")
 
         # Update the user's points in the database
         await update_user_points(member.id, points_to_add, 0)
@@ -266,6 +308,73 @@ class Ranking(commands.Cog):
             embed.add_field(name=f"#{rank}: {user_name}", value=f"{row['points']} points", inline=False)
 
         await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.has_permissions(manage_roles=True)
+    async def rankentree(self, ctx, member: discord.Member):
+        """Assign roles and set nickname for a new recruit."""
+        # Role IDs
+        recruit_role = ctx.guild.get_role(ROLE_ID_RECRUIT)
+        official_member_role = ctx.guild.get_role(ROLE_ID_OFFICIAL_MEMBER)
+        junior_personnel_role = ctx.guild.get_role(ROLE_ID_JUNIOR_PERSONNEL)
+        visitor_role = ctx.guild.get_role(ROLE_ID_AWAITING_TRYOUT)
+        unofficial_personnel_role = ctx.guild.get_role(ROLE_ID_UNOFFICIAL_PERSONNEL)
+
+        # Add roles
+        if recruit_role:
+            await member.add_roles(recruit_role)
+        if official_member_role:
+            await member.add_roles(official_member_role)
+        if junior_personnel_role:
+            await member.add_roles(junior_personnel_role)
+
+        # Remove roles
+        if visitor_role:
+            await member.remove_roles(visitor_role)
+        if unofficial_personnel_role:
+            await member.remove_roles(unofficial_personnel_role)
+
+        await ctx.send(f"✅ Roles updated for {member.mention}.")
+
+        # Send a DM to the member being ranked
+        try:
+            dm_channel = await member.create_dm()
+
+            # Ask for codename
+            await dm_channel.send("Please enter user's **codename**:")
+            try:
+                codename_msg = await self.bot.wait_for(
+                    "message", timeout=60.0, check=lambda m: m.author == member and m.channel == dm_channel
+                )
+                codename = codename_msg.content
+            except asyncio.TimeoutError:
+                await dm_channel.send("❌ You took too long to respond. Command canceled.")
+                await ctx.send(f"❌ {member.mention} did not respond in time. Command canceled.")
+                return
+
+            # Ask for Roblox username
+            await dm_channel.send("Please enter user's **Roblox username**:")
+            try:
+                roblox_msg = await self.bot.wait_for(
+                    "message", timeout=60.0, check=lambda m: m.author == member and m.channel == dm_channel
+                )
+                roblox_username = roblox_msg.content
+            except asyncio.TimeoutError:
+                await dm_channel.send("❌ You took too long to respond. Command canceled.")
+                await ctx.send(f"❌ {member.mention} did not respond in time. Command canceled.")
+                return
+
+            # Update nickname
+            new_nickname = f"{codename} | {roblox_username}"
+            try:
+                await member.edit(nick=new_nickname)
+                await dm_channel.send(f"✅ Your nickname has been updated to: `{new_nickname}`")
+                await ctx.send(f"✅ Nickname updated for {member.mention} to: `{new_nickname}`")
+            except discord.Forbidden:
+                await dm_channel.send("❌ I do not have permission to change your nickname.")
+                await ctx.send(f"❌ I do not have permission to change {member.mention}'s nickname.")
+        except discord.Forbidden:
+            await ctx.send(f"❌ Could not send a DM to {member.mention}. Ensure they have DMs enabled.")
         
 async def setup(bot):
     await bot.add_cog(Ranking(bot))
