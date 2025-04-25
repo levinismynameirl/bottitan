@@ -7,7 +7,6 @@ import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
 import os
-from ranking import initialize_database
 print("Libraries imported successfully.")
 
 # Load environment variables from .env file
@@ -51,13 +50,10 @@ print("All files loaded successfully.")
 
 # Event when the bot is ready
 print("Setting up event listeners...")
-print("Setting up database...")
 @bot.event
 async def on_ready():
-    await initialize_database()  # Initialize the PostgreSQL database
     print(f"✅ Logged in as {bot.user}")
 print("Event listeners set up successfully.")
-print("Database set up successfully.")
 print("Bot is ready to run.")
 print("-------------------------------")
 
@@ -69,15 +65,12 @@ async def main():
     print("Main function executed successfully.")
 
     # Start the bot using its token (using environment variable for safety)
-    
     await bot.start(TOKEN)
-    
 
 # Run the bot
 print("Running the bot...")
 print("Bot is running.")
 print("-------------------------------")
-print("Bot succesfully started")
+print("Bot successfully started")
 if __name__ == "__main__":
     asyncio.run(main())  # Run the async main function
-

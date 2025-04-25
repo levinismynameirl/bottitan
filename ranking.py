@@ -4,6 +4,7 @@ from datetime import datetime
 import asyncio
 import asyncpg
 import os
+from database import create_pool, initialize_database
 
 Official_Member = 1346557689303662633  # Replace with the actual role ID
 
@@ -17,15 +18,8 @@ class Ranking(commands.Cog):
     async def setup_db(self):
         if not self.pool:
             try:
-                self.pool = await asyncpg.create_pool(os.getenv("DATABASE_URL"))
-                async with self.pool.acquire() as conn:
-                    await conn.execute("""
-                        CREATE TABLE IF NOT EXISTS points (
-                            user_id BIGINT PRIMARY KEY,
-                            points INTEGER NOT NULL DEFAULT 0
-                        );
-                    """)
-                print("✅ Database initialized successfully.")
+                self.pool = await create_pool()
+                await initialize_database(self.pool)
             except Exception as e:
                 print(f"❌ Failed to initialize database: {e}")
 
