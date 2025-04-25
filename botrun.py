@@ -1,13 +1,13 @@
 print("Starting the bot...")
 print("-------------------------------")
-
+print("dot")
 print("Importing required libraries...")
 import discord
 import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
 import os
-#from ranking import initialize_database
+from ranking import initialize_database
 print("Libraries imported successfully.")
 
 # Load environment variables from .env file
