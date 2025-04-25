@@ -1,187 +1,158 @@
 import discord
 from discord.ext import commands, tasks
-from datetime import datetime, timedelta
+from datetime import datetime
 import asyncio
 import asyncpg
+import os
 
-Official_Member_Role_ID = 1346557689303662633  # Replace with your actual role ID
-
-DATABASE_URL = "postgresql://postgres:jAHFxyiZVaVQAujHMPOLBtlMHZTbllTa@postgres.railway.internal:5432/railway"
-
-async def initialize_database():
-    """Initialize the PostgreSQL database."""
-    conn = await asyncpg.connect(DATABASE_URL)
-    await conn.execute("""
-        CREATE TABLE IF NOT EXISTS points (
-            user_id BIGINT PRIMARY KEY,
-            points INT DEFAULT 0
-        );
-    """)
-    await conn.close()
-    print("✅ Database initialized successfully.")
+Official_Member = 1346557689303662633  # Replace with the actual role ID
 
 class Ranking(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_shifts = {}  # Tracks active shifts for users
-        self.shift_embeds = {}  # Tracks the embed messages for active shifts
+        self.active_shifts = {}
+        self.shift_embeds = {}
+        self.pool = None  # DB pool
 
-    async def connect_db(self):
-        """Connect to the database."""
-        return await asyncpg.connect(DATABASE_URL)
+    async def setup_db(self):
+        self.pool = await asyncpg.create_pool(os.getenv("DATABASE_URL"))
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS points (
+                    user_id BIGINT PRIMARY KEY,
+                    points INTEGER NOT NULL DEFAULT 0
+                );
+            """)
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        if not self.pool:
+            await self.setup_db()
+            print("✅ Connected to the database.")
+
+    async def add_points(self, user_id: int, amount: int):
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO points (user_id, points)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id)
+                DO UPDATE SET points = points.points + $2;
+            """, user_id, amount)
+
+    async def get_points(self, user_id: int) -> int:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT points FROM points WHERE user_id = $1;", user_id)
+            return row['points'] if row else 0
+
+    async def set_points(self, user_id: int, amount: int):
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO points (user_id, points)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id)
+                DO UPDATE SET points = $2;
+            """, user_id, amount)
 
     @commands.command()
-    @commands.has_role("Official Member")
+    @commands.has_role(Official_Member)
     async def startshift(self, ctx):
-        """Start a shift."""
-        # Send a DM to the user for confirmation
         try:
-            dm_channel = await ctx.author.create_dm()
+            dm = await ctx.author.create_dm()
             embed = discord.Embed(
                 title="Start Shift",
-                description=(
-                    "React with ✅ to start your shift or ❌ to cancel.\n\n"
-                    "⚠️ **Important:** You must always have video proof of your shift, as you may be asked for it."
-                ),
+                description="React ✅ to start or ❌ to cancel.\n⚠️ Video proof required.",
                 color=discord.Color.orange()
             )
-            message = await dm_channel.send(embed=embed)
-            await message.add_reaction("✅")
-            await message.add_reaction("❌")
+            msg = await dm.send(embed=embed)
+            await msg.add_reaction("✅")
+            await msg.add_reaction("❌")
 
-            def check(reaction, user):
-                return user == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == message.id
+            def check(reaction, user): return user == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == msg.id
+            reaction, _ = await self.bot.wait_for("reaction_add", timeout=60, check=check)
 
-            reaction, user = await self.bot.wait_for("reaction_add", timeout=60.0, check=check)
             if str(reaction.emoji) == "✅":
-                # Start the shift
                 start_time = datetime.utcnow()
                 self.active_shifts[ctx.author.id] = start_time
 
-                # Send an embed that updates every minute
-                embed = discord.Embed(
+                progress_embed = discord.Embed(
                     title="Shift In Progress",
-                    description=(
-                        "Your shift has started. React below to control your shift:\n"
-                        "⏸️ **Pause**\n"
-                        "▶️ **Resume**\n"
-                        "⏹️ **Stop**\n\n"
-                        "⚠️ **Important:** You must always have video proof of your shift, as you may be asked for it."
-                    ),
+                    description="⏸️ Pause | ▶️ Resume | ⏹️ Stop\n⚠️ Video proof required.",
                     color=discord.Color.green()
                 )
-                embed.add_field(name="Minutes Since Start", value="0", inline=False)
-                shift_message = await dm_channel.send(embed=embed)
-                await shift_message.add_reaction("⏸️")
-                await shift_message.add_reaction("▶️")
-                await shift_message.add_reaction("⏹️")
+                progress_embed.add_field(name="Minutes Since Start", value="0", inline=False)
+                shift_msg = await dm.send(embed=progress_embed)
+                await shift_msg.add_reaction("⏸️")
+                await shift_msg.add_reaction("▶️")
+                await shift_msg.add_reaction("⏹️")
 
-                self.shift_embeds[ctx.author.id] = shift_message
+                self.shift_embeds[ctx.author.id] = shift_msg
+                paused = False
 
-                # Update the embed every minute
                 @tasks.loop(minutes=1)
                 async def update_embed():
                     if ctx.author.id in self.active_shifts:
-                        elapsed_time = datetime.utcnow() - self.active_shifts[ctx.author.id]
-                        minutes = elapsed_time.total_seconds() // 60
-                        embed.set_field_at(0, name="Minutes Since Start", value=str(int(minutes)), inline=False)
-                        await shift_message.edit(embed=embed)
+                        elapsed = datetime.utcnow() - self.active_shifts[ctx.author.id]
+                        minutes = int(elapsed.total_seconds() // 60)
+                        progress_embed.set_field_at(0, name="Minutes Since Start", value=str(minutes), inline=False)
+                        await shift_msg.edit(embed=progress_embed)
 
                 update_embed.start()
 
-                # Handle reactions for pause, resume, and stop
-                paused = False
-
-                def shift_check(reaction, user):
-                    return user == ctx.author and str(reaction.emoji) in ["⏸️", "▶️", "⏹️"] and reaction.message.id == shift_message.id
+                def shift_check(r, u): return u == ctx.author and str(r.emoji) in ["⏸️", "▶️", "⏹️"] and r.message.id == shift_msg.id
 
                 while True:
-                    reaction, user = await self.bot.wait_for("reaction_add", check=shift_check)
-
-                    if str(reaction.emoji) == "⏸️":
+                    r, _ = await self.bot.wait_for("reaction_add", check=shift_check)
+                    if r.emoji == "⏸️":
                         if not paused:
                             paused = True
                             update_embed.stop()
-                            await dm_channel.send("⏸️ Your shift has been paused.", delete_after=5)
+                            await dm.send("⏸️ Paused.")
                         else:
-                            await dm_channel.send("❌ Your shift is already paused.", delete_after=5)
-
-                    elif str(reaction.emoji) == "▶️":
+                            await dm.send("❌ Already paused.")
+                    elif r.emoji == "▶️":
                         if paused:
                             paused = False
                             update_embed.start()
-                            await dm_channel.send("▶️ Your shift has been resumed.", delete_after=5)
+                            await dm.send("▶️ Resumed.")
                         else:
-                            await dm_channel.send("❌ Your shift is already active.", delete_after=5)
-
-                    elif str(reaction.emoji) == "⏹️":
+                            await dm.send("❌ Already running.")
+                    elif r.emoji == "⏹️":
                         update_embed.stop()
-                        elapsed_time = datetime.utcnow() - self.active_shifts.pop(ctx.author.id)
-                        minutes = int(elapsed_time.total_seconds() // 60)
-
-                        # Add points to the user
+                        elapsed = datetime.utcnow() - self.active_shifts.pop(ctx.author.id)
+                        minutes = int(elapsed.total_seconds() // 60)
                         await self.add_points(ctx.author.id, minutes)
-
-                        await dm_channel.send(
-                            f"⏹️ Your shift has been stopped. You earned {minutes} points.\n"
-                            "⚠️ **Important:** You must always have video proof of your shift, as you may be asked for it."
-                        )
+                        await dm.send(f"⏹️ Stopped. You earned {minutes} points.")
                         break
+            else:
+                await dm.send("❌ Shift start canceled.")
 
-            elif str(reaction.emoji) == "❌":
-                await dm_channel.send("❌ Shift start canceled.")
         except asyncio.TimeoutError:
-            await ctx.send("❌ You took too long to respond. Shift start canceled.")
+            await ctx.send("❌ Timed out.")
         except discord.Forbidden:
-            await ctx.send("❌ I could not send you a DM. Please enable DMs and try again.")
-
-    async def add_points(self, user_id, points):
-        """Add points to a user."""
-        conn = await self.connect_db()
-        await conn.execute(
-            """
-            INSERT INTO points (user_id, points)
-            VALUES ($1, $2)
-            ON CONFLICT (user_id) DO UPDATE
-            SET points = points + $2
-            """,
-            user_id, points
-        )
-        await conn.close()
+            await ctx.send("❌ I couldn't DM you. Enable DMs.")
 
     @commands.command()
     async def points(self, ctx, member: discord.Member = None):
-        """View the points of a user."""
         member = member or ctx.author
-        conn = await self.connect_db()
-        row = await conn.fetchrow("SELECT points FROM points WHERE user_id = $1", member.id)
-        await conn.close()
-
-        points = row["points"] if row else 0
+        points = await self.get_points(member.id)
         await ctx.send(f"**{member.display_name}** has **{points}** points.")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def addpoints(self, ctx, member: discord.Member, points: int):
-        """Add points to a user (Administrator only)."""
-        await self.add_points(member.id, points)
-        await ctx.send(f"✅ Added {points} points to {member.mention}.")
+    async def addpoints(self, ctx, member: discord.Member, amount: int):
+        await self.add_points(member.id, amount)
+        await ctx.send(f"✅ Added {amount} points to {member.mention}.")
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def removepoints(self, ctx, member: discord.Member, points: int):
-        """Remove points from a user (Administrator only)."""
-        conn = await self.connect_db()
-        await conn.execute(
-            """
-            UPDATE points
-            SET points = points - $1
-            WHERE user_id = $2
-            """,
-            points, member.id
-        )
-        await conn.close()
-        await ctx.send(f"✅ Removed {points} points from {member.mention}.")
+    async def removepoints(self, ctx, member: discord.Member, amount: int):
+        current = await self.get_points(member.id)
+        new_points = max(0, current - amount)
+        await self.set_points(member.id, new_points)
+        await ctx.send(f"✅ Removed {amount} points from {member.mention}.")
 
 async def setup(bot):
-    await bot.add_cog(Ranking(bot))
+    cog = Ranking(bot)
+    await bot.add_cog(cog)
+    await cog.setup_db()  # Ensure the database is set up when the cog is loaded
+    print("✅ Ranking cog loaded and database set up.")
