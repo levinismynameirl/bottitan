@@ -32,9 +32,10 @@ class Ranking(commands.Cog):
             print("✅ Connected to the database.")
 
     async def add_points(self, user_id: int, amount: int):
-        """Add points to a user without updating the time column."""
+        """Add points to a user."""
         async with self.pool.acquire() as conn:
             try:
+                user_id = str(user_id)  # Convert user_id to string
                 print(f"DEBUG: Adding {amount} points to user_id {user_id}")  # Debugging message
                 await conn.execute("""
                     INSERT INTO points (user_id, points)
@@ -47,8 +48,10 @@ class Ranking(commands.Cog):
                 print(f"❌ Failed to add points for user_id {user_id}: {e}")
 
     async def get_points(self, user_id: int) -> int:
+        """Fetch points for a user."""
         async with self.pool.acquire() as conn:
             try:
+                user_id = str(user_id)  # Convert user_id to string
                 print(f"DEBUG: Fetching points for user_id {user_id}")  # Debugging message
                 row = await conn.fetchrow("SELECT points FROM points WHERE user_id = $1;", user_id)
                 points = row['points'] if row else 0
@@ -71,15 +74,14 @@ class Ranking(commands.Cog):
         """Add points and update the time column for a user after a shift."""
         async with self.pool.acquire() as conn:
             try:
+                user_id = str(user_id)  # Convert user_id to string
                 print(f"DEBUG: Adding {points} points and {minutes} minutes to user_id {user_id}")  # Debugging message
                 await conn.execute("""
-                    INSERT INTO points (user_id, points, time)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO points (user_id, points)
+                    VALUES ($1, $2)
                     ON CONFLICT (user_id)
-                    DO UPDATE SET 
-                        points = points.points + EXCLUDED.points,
-                        time = points.time + EXCLUDED.time;
-                """, user_id, points, minutes)
+                    DO UPDATE SET points = points.points + EXCLUDED.points;
+                """, user_id, points)
                 print(f"DEBUG: Successfully added {points} points and {minutes} minutes to user_id {user_id}")  # Debugging message
             except Exception as e:
                 print(f"❌ Failed to add shift points for user_id {user_id}: {e}")

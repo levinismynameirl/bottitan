@@ -46,6 +46,7 @@ async def load_extensions():
     await bot.load_extension("embedsend")  # Load the EmbedSend cog
     await bot.load_extension("stats")  # Load the ServerStats cog
     await bot.load_extension("activityreport")  # Load the ActivityReport cog
+    await bot.load_extension("antinuke")  # Load the antinuke cog
 print("All files loaded successfully.")
 
 # Event when the bot is ready
