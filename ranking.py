@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import asyncio
 import asyncpg
 
+Official_Member_Role_ID = 1346557689303662633  # Replace with your actual role ID
+
 DATABASE_URL = "postgresql://postgres:jAHFxyiZVaVQAujHMPOLBtlMHZTbllTa@postgres.railway.internal:5432/railway"
 
 async def initialize_database():
