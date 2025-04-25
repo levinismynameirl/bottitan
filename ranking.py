@@ -15,14 +15,19 @@ class Ranking(commands.Cog):
         self.pool = None  # DB pool
 
     async def setup_db(self):
-        self.pool = await asyncpg.create_pool(os.getenv("DATABASE_URL"))
-        async with self.pool.acquire() as conn:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS points (
-                    user_id BIGINT PRIMARY KEY,
-                    points INTEGER NOT NULL DEFAULT 0
-                );
-            """)
+        if not self.pool:
+            try:
+                self.pool = await asyncpg.create_pool(os.getenv("DATABASE_URL"))
+                async with self.pool.acquire() as conn:
+                    await conn.execute("""
+                        CREATE TABLE IF NOT EXISTS points (
+                            user_id BIGINT PRIMARY KEY,
+                            points INTEGER NOT NULL DEFAULT 0
+                        );
+                    """)
+                print("✅ Database initialized successfully.")
+            except Exception as e:
+                print(f"❌ Failed to initialize database: {e}")
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -32,12 +37,15 @@ class Ranking(commands.Cog):
 
     async def add_points(self, user_id: int, amount: int):
         async with self.pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO points (user_id, points)
-                VALUES ($1, $2)
-                ON CONFLICT (user_id)
-                DO UPDATE SET points = points.points + $2;
-            """, user_id, amount)
+            try:
+                await conn.execute("""
+                    INSERT INTO points (user_id, points)
+                    VALUES ($1, $2)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET points = points.points + $2;
+                """, user_id, amount)
+            except Exception as e:
+                print(f"❌ Failed to add points: {e}")
 
     async def get_points(self, user_id: int) -> int:
         async with self.pool.acquire() as conn:
@@ -91,12 +99,13 @@ class Ranking(commands.Cog):
                 @tasks.loop(minutes=1)
                 async def update_embed():
                     if ctx.author.id in self.active_shifts:
-                        elapsed = datetime.utcnow() - self.active_shifts[ctx.author.id]
-                        minutes = int(elapsed.total_seconds() // 60)
-                        progress_embed.set_field_at(0, name="Minutes Since Start", value=str(minutes), inline=False)
+                        elapsed_time = datetime.utcnow() - self.active_shifts[ctx.author.id]
+                        minutes = elapsed_time.total_seconds() // 60
+                        progress_embed.set_field_at(0, name="Minutes Since Start", value=str(int(minutes)), inline=False)
                         await shift_msg.edit(embed=progress_embed)
 
-                update_embed.start()
+                # Stop the loop when the shift ends
+                update_embed.stop()
 
                 def shift_check(r, u): return u == ctx.author and str(r.emoji) in ["⏸️", "▶️", "⏹️"] and r.message.id == shift_msg.id
 
