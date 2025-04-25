@@ -36,21 +36,31 @@ class Ranking(commands.Cog):
             print("✅ Connected to the database.")
 
     async def add_points(self, user_id: int, amount: int):
+        """Add points to a user."""
         async with self.pool.acquire() as conn:
             try:
+                print(f"DEBUG: Adding {amount} points to user_id {user_id}")  # Debugging message
                 await conn.execute("""
                     INSERT INTO points (user_id, points)
                     VALUES ($1, $2)
                     ON CONFLICT (user_id)
-                    DO UPDATE SET points = points.points + $2;
+                    DO UPDATE SET points = points + $2;
                 """, user_id, amount)
+                print(f"DEBUG: Successfully added {amount} points to user_id {user_id}")  # Debugging message
             except Exception as e:
-                print(f"❌ Failed to add points: {e}")
+                print(f"❌ Failed to add points for user_id {user_id}: {e}")
 
     async def get_points(self, user_id: int) -> int:
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow("SELECT points FROM points WHERE user_id = $1;", user_id)
-            return row['points'] if row else 0
+            try:
+                print(f"DEBUG: Fetching points for user_id {user_id}")  # Debugging message
+                row = await conn.fetchrow("SELECT points FROM points WHERE user_id = $1;", user_id)
+                points = row['points'] if row else 0
+                print(f"DEBUG: Points fetched for user_id {user_id}: {points}")  # Debugging message
+                return points
+            except Exception as e:
+                print(f"❌ Failed to fetch points for user_id {user_id}: {e}")
+                return 0
 
     async def set_points(self, user_id: int, amount: int):
         async with self.pool.acquire() as conn:
@@ -129,6 +139,7 @@ class Ranking(commands.Cog):
                         update_embed.stop()
                         elapsed = datetime.utcnow() - self.active_shifts.pop(ctx.author.id)
                         minutes = int(elapsed.total_seconds() // 60)
+                        print(f"DEBUG: Shift ended for user_id {ctx.author.id}. Minutes: {minutes}")  # Debugging message
                         await self.add_points(ctx.author.id, minutes)
                         await dm.send(f"⏹️ Stopped. You earned {minutes} points.")
                         break
@@ -143,7 +154,9 @@ class Ranking(commands.Cog):
     @commands.command()
     async def points(self, ctx, member: discord.Member = None):
         member = member or ctx.author
+        print(f"DEBUG: Fetching points for {member.display_name} (ID: {member.id})")  # Debugging message
         points = await self.get_points(member.id)
+        print(f"DEBUG: Points for {member.display_name}: {points}")  # Debugging message
         await ctx.send(f"**{member.display_name}** has **{points}** points.")
 
     @commands.command()
