@@ -18,8 +18,10 @@ class Ranking(commands.Cog):
     async def setup_db(self):
         if not self.pool:
             try:
+                print("DEBUG: Initializing database connection pool...")  # Debugging message
                 self.pool = await create_pool()
                 await initialize_database(self.pool)
+                print("DEBUG: Database connection pool initialized.")  # Debugging message
             except Exception as e:
                 print(f"❌ Failed to initialize database: {e}")
 
@@ -30,7 +32,7 @@ class Ranking(commands.Cog):
             print("✅ Connected to the database.")
 
     async def add_points(self, user_id: int, amount: int):
-        """Add points to a user."""
+        """Add points to a user without updating the time column."""
         async with self.pool.acquire() as conn:
             try:
                 print(f"DEBUG: Adding {amount} points to user_id {user_id}")  # Debugging message
@@ -38,7 +40,7 @@ class Ranking(commands.Cog):
                     INSERT INTO points (user_id, points)
                     VALUES ($1, $2)
                     ON CONFLICT (user_id)
-                    DO UPDATE SET points = points.points + $2;
+                    DO UPDATE SET points = points.points + EXCLUDED.points;
                 """, user_id, amount)
                 print(f"DEBUG: Successfully added {amount} points to user_id {user_id}")  # Debugging message
             except Exception as e:
@@ -65,6 +67,23 @@ class Ranking(commands.Cog):
                 DO UPDATE SET points = $2;
             """, user_id, amount)
 
+    async def add_shift_points(self, user_id: int, points: int, minutes: int):
+        """Add points and update the time column for a user after a shift."""
+        async with self.pool.acquire() as conn:
+            try:
+                print(f"DEBUG: Adding {points} points and {minutes} minutes to user_id {user_id}")  # Debugging message
+                await conn.execute("""
+                    INSERT INTO points (user_id, points, time)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET 
+                        points = points.points + EXCLUDED.points,
+                        time = points.time + EXCLUDED.time;
+                """, user_id, points, minutes)
+                print(f"DEBUG: Successfully added {points} points and {minutes} minutes to user_id {user_id}")  # Debugging message
+            except Exception as e:
+                print(f"❌ Failed to add shift points for user_id {user_id}: {e}")
+
     @commands.command()
     @commands.has_role(Official_Member)
     async def startshift(self, ctx):
@@ -79,7 +98,9 @@ class Ranking(commands.Cog):
             await msg.add_reaction("✅")
             await msg.add_reaction("❌")
 
-            def check(reaction, user): return user == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == msg.id
+            def check(reaction, user): 
+                return user == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == msg.id
+
             reaction, _ = await self.bot.wait_for("reaction_add", timeout=60, check=check)
 
             if str(reaction.emoji) == "✅":
@@ -108,10 +129,10 @@ class Ranking(commands.Cog):
                         progress_embed.set_field_at(0, name="Minutes Since Start", value=str(int(minutes)), inline=False)
                         await shift_msg.edit(embed=progress_embed)
 
-                # Stop the loop when the shift ends
-                update_embed.stop()
+                update_embed.start()
 
-                def shift_check(r, u): return u == ctx.author and str(r.emoji) in ["⏸️", "▶️", "⏹️"] and r.message.id == shift_msg.id
+                def shift_check(r, u): 
+                    return u == ctx.author and str(r.emoji) in ["⏸️", "▶️", "⏹️"] and r.message.id == shift_msg.id
 
                 while True:
                     r, _ = await self.bot.wait_for("reaction_add", check=shift_check)
@@ -134,7 +155,7 @@ class Ranking(commands.Cog):
                         elapsed = datetime.utcnow() - self.active_shifts.pop(ctx.author.id)
                         minutes = int(elapsed.total_seconds() // 60)
                         print(f"DEBUG: Shift ended for user_id {ctx.author.id}. Minutes: {minutes}")  # Debugging message
-                        await self.add_points(ctx.author.id, minutes)
+                        await self.add_shift_points(ctx.author.id, minutes, minutes)
                         await dm.send(f"⏹️ Stopped. You earned {minutes} points.")
                         break
             else:
