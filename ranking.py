@@ -38,7 +38,7 @@ class Ranking(commands.Cog):
                     INSERT INTO points (user_id, points)
                     VALUES ($1, $2)
                     ON CONFLICT (user_id)
-                    DO UPDATE SET points = points + $2;
+                    DO UPDATE SET points = points.points + $2;
                 """, user_id, amount)
                 print(f"DEBUG: Successfully added {amount} points to user_id {user_id}")  # Debugging message
             except Exception as e:
