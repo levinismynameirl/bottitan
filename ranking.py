@@ -6,6 +6,18 @@ import asyncpg
 
 DATABASE_URL = "postgresql://postgres:jAHFxyiZVaVQAujHMPOLBtlMHZTbllTa@postgres.railway.internal:5432/railway"
 
+async def initialize_database():
+    """Initialize the PostgreSQL database."""
+    conn = await asyncpg.connect(DATABASE_URL)
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS points (
+            user_id BIGINT PRIMARY KEY,
+            points INT DEFAULT 0
+        );
+    """)
+    await conn.close()
+    print("✅ Database initialized successfully.")
+
 class Ranking(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
