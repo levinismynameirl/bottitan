@@ -21,7 +21,7 @@ class ActivityReport(commands.Cog):
         now = datetime.utcnow()
         seven_days_ago = now - timedelta(days=7)
 
-        async for member in ctx.guild.fetch_members(limit=None):
+        for member in ctx.guild.members:
             if official_member_role in member.roles:
                 # Calculate days in the server
                 days_in_server = (now - member.joined_at).days if member.joined_at else "Unknown"
@@ -32,28 +32,25 @@ class ActivityReport(commands.Cog):
                 # Count messages sent in the past 7 days
                 message_count = 0
                 for channel in ctx.guild.text_channels:
-                    try:
-                        async for message in channel.history(after=seven_days_ago, limit=None):
-                            if message.author == member:
-                                message_count += 1
-                    except discord.Forbidden:
-                        continue
+                    if channel.permissions_for(ctx.guild.me).read_messages:
+                        try:
+                            async for message in channel.history(after=seven_days_ago, limit=1000):
+                                if message.author == member:
+                                    message_count += 1
+                        except discord.Forbidden:
+                            continue
 
                 # Calculate last active time (in hours)
                 last_active = "Unknown"
                 for channel in ctx.guild.text_channels:
-                    try:
-                        async for message in channel.history(limit=1):
-                            if message.author == member:
-                                last_active = (now - message.created_at).total_seconds() // 3600
-                                break
-                    except discord.Forbidden:
-                        continue
-
-                # Calculate total time spent in voice channels (in minutes)
-                total_voice_time = 0
-                if member.voice and member.voice.channel:
-                    total_voice_time = (now - member.voice.channel.created_at).total_seconds() // 60
+                    if channel.permissions_for(ctx.guild.me).read_messages:
+                        try:
+                            async for message in channel.history(limit=1):
+                                if message.author == member:
+                                    last_active = (now - message.created_at).total_seconds() // 3600
+                                    break
+                        except discord.Forbidden:
+                            continue
 
                 # Add member's data to the report
                 report.append(
@@ -62,14 +59,13 @@ class ActivityReport(commands.Cog):
                     f"- Messages Sent (7 days): {message_count}\n"
                     f"- Days in Server: {days_in_server}\n"
                     f"- LOA: {loa_status}\n"
-                    f"- Voice Time (7 days): {total_voice_time} minutes\n"
                 )
 
         # Send the report
         if report:
             embed = discord.Embed(
                 title="Activity Report",
-                description="\n\n".join(report),
+                description="\n\n".join(report[:10]),  # Limit to the first 10 members to avoid exceeding embed limits
                 color=discord.Color.blue()
             )
             await ctx.send(embed=embed)
