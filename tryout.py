@@ -66,7 +66,7 @@ class Tryout(commands.Cog):
             description=f"A tryout is starting at **{start_time.strftime('%H:%M')} UTC**.\n"
                         f"There are **12 spaces** available.\n"
                         f"Tryout ID: `{tryout_id}`\n\n"
-                        f"Click the buttons below to join or leave the tryout.",
+                        f"**Participants:**\nNo participants yet.",
             color=discord.Color.blue()
         )
         embed.set_footer(text="You must have the 'Visitor' role to join.")
@@ -88,16 +88,50 @@ class Tryout(commands.Cog):
                 await interaction.response.send_message("❌ You are already in the tryout.", ephemeral=True)
                 return
 
-            self.tryouts[tryout_id]["participants"][interaction.user.id] = 10  # Start with 10 points
+            # Add participant with default points (10)
+            self.tryouts[tryout_id]["participants"][interaction.user.id] = 10
             await interaction.response.send_message("✅ You have joined the tryout.", ephemeral=True)
+
+            # Update the announcement message with the current participants
+            participants = "\n".join(
+                [f"{interaction.guild.get_member(member_id).name}: {points} points"
+                 for member_id, points in self.tryouts[tryout_id]["participants"].items()]
+            )
+            updated_embed = discord.Embed(
+                title="Tryout Announcement",
+                description=f"A tryout is starting at **{start_time.strftime('%H:%M')} UTC**.\n"
+                            f"There are **12 spaces** available.\n"
+                            f"Tryout ID: `{tryout_id}`\n\n"
+                            f"**Participants:**\n{participants}",
+                color=discord.Color.blue()
+            )
+            updated_embed.set_footer(text="You must have the 'Visitor' role to join.")
+            await announcement_message.edit(embed=updated_embed)
 
         async def leave_callback(interaction):
             if interaction.user.id not in self.tryouts[tryout_id]["participants"]:
                 await interaction.response.send_message("❌ You are not in the tryout.", ephemeral=True)
                 return
 
-            del self.tryouts[tryout_id]["participants"][interaction.user.id]
+            del self.tryouts[tryout_id]["participants"][interaction.user.id]  # Remove participant
             await interaction.response.send_message("✅ You have left the tryout.", ephemeral=True)
+
+            # Update the announcement message with the current participants
+            participants = "\n".join(
+                [f"{interaction.guild.get_member(member_id).name}: {points} points"
+                 for member_id, points in self.tryouts[tryout_id]["participants"].items()]
+            )
+            participants = participants if participants else "No participants yet."
+            updated_embed = discord.Embed(
+                title="Tryout Announcement",
+                description=f"A tryout is starting at **{start_time.strftime('%H:%M')} UTC**.\n"
+                            f"There are **12 spaces** available.\n"
+                            f"Tryout ID: `{tryout_id}`\n\n"
+                            f"**Participants:**\n{participants}",
+                color=discord.Color.blue()
+            )
+            updated_embed.set_footer(text="You must have the 'Visitor' role to join.")
+            await announcement_message.edit(embed=updated_embed)
 
         join_button.callback = join_callback
         leave_button.callback = leave_callback
@@ -112,7 +146,8 @@ class Tryout(commands.Cog):
             await ctx.send("❌ Could not find the tryout channel. Please check the channel ID.")
             return
 
-        await tryout_channel.send(embed=embed, view=view)
+        # Send the initial announcement message
+        announcement_message = await tryout_channel.send(embed=embed, view=view)
 
         # Wait until the tryout starts
         await asyncio.sleep(minutes_until_start * 60)
@@ -125,9 +160,37 @@ class Tryout(commands.Cog):
         channel = await ctx.guild.create_text_channel(f"tryout-{tryout_id}-management", overwrites=overwrites)
         self.tryouts[tryout_id]["channel"] = channel
 
-        await channel.send(f"Welcome to the tryout management channel for Tryout ID `{tryout_id}`.\n"
-                           f"Host: {ctx.author.mention}\n"
-                           f"Use this channel to manage the tryout.")
+        # Prepare the list of participants
+        participants = "\n".join(
+            [f"<@{member_id}>: {points} points" for member_id, points in self.tryouts[tryout_id]["participants"].items()]
+        )
+        participants = participants if participants else "No participants yet."
+
+        # Prepare the list of commands
+        commands_list = """
+**Available Commands:**
+- `!setcohost <tryout_id> <member>`: Set a co-host for the tryout.
+- `!addscore <tryout_id> <member> <points>`: Add points to a participant.
+- `!removescore <tryout_id> <member> <points>`: Remove points from a participant.
+- `!addscoreall <tryout_id> <points>`: Add points to all participants.
+- `!removescoreall <tryout_id> <points>`: Remove points from all participants.
+- `!showpoints <tryout_id>`: Show the points of all participants.
+- `!endtryout <tryout_id>`: End the tryout and process results.
+"""
+
+        # Create the embed
+        embed = discord.Embed(
+            title=f"Tryout Management - ID `{tryout_id}`",
+            description=f"**Host:** {ctx.author.mention}\n"
+                        f"**Co-Host:** None\n\n"
+                        f"**Participants:**\n{participants}\n\n"
+                        f"{commands_list}",
+            color=discord.Color.green()
+        )
+
+        # Send the embed to the management channel
+        management_message = await channel.send(embed=embed)
+        self.tryouts[tryout_id]["management_message"] = management_message
 
     @commands.command()
     async def setcohost(self, ctx, tryout_id: int, member: discord.Member):
@@ -208,7 +271,7 @@ class Tryout(commands.Cog):
 
         # Clean up
         channel = tryout["channel"]
-        await channel.delete()
+        await channel.delete()  # Delete the tryout management channel
         del self.tryouts[tryout_id]
         await ctx.send(f"✅ Tryout ID `{tryout_id}` has been ended.")
 
