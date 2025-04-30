@@ -213,7 +213,7 @@ class Ranking(commands.Cog):
 
     @commands.command()
     @commands.has_role("• OFFICE OF THE TASK FORCE COMMANDER •")  # Replace "ECB" with the exact name of the role
-    async def loa(self, ctx):
+    async def showloa(self, ctx):
         """Show all users currently on Leave of Absence (LOA)."""
         # Assuming you have a way to track LOA users, e.g., a dictionary or database table
         loa_users = await self.get_loa_users()  # Replace with your actual LOA tracking logic
