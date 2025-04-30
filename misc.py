@@ -148,7 +148,14 @@ class Misc(commands.Cog):
     @commands.command()
     async def scramble(self, ctx):
         """Play a word scramble game."""
-        words = ["python", "discord", "bot", "programming", "developer", "apple", "snake", "banana" "orange"] 
+        words = ["python", "discord", "bot", "programming", "developer", "apple", "snake", "banana", "orange", "pig", "computer", "code", "java", "mouse", "keyboard", "monitor", "cloud", "server", "network", "wifi", "robot", "android", "software", "hardware", "binary", "laptop", "engineer", "script", "terminal", "compile", "debug", "function", "variable", "loop", "condition", "algorithm", "array", "list", "dictionary", "string",
+"integer", "float", "boolean", "package", "module", "github", "repository", "commit", "push", "pull",
+"branch", "merge", "clone", "token", "api", "request", "response", "json", "xml", "url",
+"socket", "firewall", "encryption", "cyber", "security", "malware", "phishing", "trojan", "hacker", "firefox",
+"chrome", "browser", "search", "engine", "google", "bing", "yahoo", "internet", "web", "page",
+"html", "css", "javascript", "framework", "react", "vue", "angular", "node", "express", "database",
+"mysql", "sqlite", "postgres", "mongodb", "query", "index", "table", "row", "column", "data"
+] 
         word = random.choice(words)
         scrambled = "".join(random.sample(word, len(word)))
 

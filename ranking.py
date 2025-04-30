@@ -111,7 +111,9 @@ class Ranking(commands.Cog):
 
                 progress_embed = discord.Embed(
                     title="Shift In Progress",
-                    description="⏸️ Pause | ▶️ Resume | ⏹️ Stop\n⚠️ Video proof required.",
+                    description="⏸️ Pause | ▶️ Resume | ⏹️ Stop\n⚠️ You may be asked to provide video proof of each shift up to a week after the shift ends. (This is a requirement for all shifts.)",
+                    footer="Shift started!",
+                    timestamp=start_time,
                     color=discord.Color.green()
                 )
                 progress_embed.add_field(name="Minutes Since Start", value="0", inline=False)
@@ -189,6 +191,52 @@ class Ranking(commands.Cog):
         new_points = max(0, current - amount)
         await self.set_points(member.id, new_points)
         await ctx.send(f"✅ Removed {amount} points from {member.mention}.")
+
+    @commands.command()
+    @commands.has_role("• OFFICE OF THE TASK FORCE COMMANDER •")  # Replace "ECB" with the exact name of the role
+    async def activeshifts(self, ctx):
+        """Show all users currently on an active shift."""
+        if not self.active_shifts:
+            await ctx.send("❌ No users are currently on an active shift.")
+            return
+
+        active_users = "\n".join(
+            [f"<@{user_id}> - Started at {start_time.strftime('%H:%M:%S UTC')}" 
+             for user_id, start_time in self.active_shifts.items()]
+        )
+        embed = discord.Embed(
+            title="Active Shifts",
+            description=active_users,
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.has_role("• OFFICE OF THE TASK FORCE COMMANDER •")  # Replace "ECB" with the exact name of the role
+    async def loa(self, ctx):
+        """Show all users currently on Leave of Absence (LOA)."""
+        # Assuming you have a way to track LOA users, e.g., a dictionary or database table
+        loa_users = await self.get_loa_users()  # Replace with your actual LOA tracking logic
+
+        if not loa_users:
+            await ctx.send("❌ No users are currently on LOA.")
+            return
+
+        loa_list = "\n".join([f"<@{user_id}>" for user_id in loa_users])
+        embed = discord.Embed(
+            title="Users on LOA",
+            description=loa_list,
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+
+    async def get_loa_users(self):
+        """Fetch users on LOA from the database or other storage."""
+        # Replace this with your actual logic to fetch LOA users
+        # For example, if stored in a database:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT user_id FROM loa_users;")
+            return [row["user_id"] for row in rows]
 
 async def setup(bot):
     cog = Ranking(bot)
