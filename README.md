@@ -2,6 +2,8 @@
 
 Titan One OS is a custom Discord bot designed for the **Titan One SCP Faction Server**. The bot provides various moderation and utility commands to help manage the server efficiently. Below is a detailed guide on how to use the bot, including its commands and functionality.
 
+## NOTE: EVERYTHING BELOW MAY BE OUTDATED. ASK DEV FOR OFFICIAL COMMANDS
+
 ---
 
 ## **How to Run the Bot**

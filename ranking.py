@@ -87,9 +87,15 @@ class Ranking(commands.Cog):
                 print(f"❌ Failed to add shift points for user_id {user_id}: {e}")
 
     @commands.command()
-    @commands.has_role(Official_Member)
+    @commands.has_role(Official_Member)  # Replace with the actual role name or ID
     async def startshift(self, ctx):
+        """Start a shift."""
         try:
+            # Check if the user already has an active shift
+            if ctx.author.id in self.active_shifts:
+                await ctx.send("❌ You already have an active shift. Please stop your current shift before starting a new one.")
+                return
+
             dm = await ctx.author.create_dm()
             embed = discord.Embed(
                 title="Start Shift",
@@ -100,7 +106,7 @@ class Ranking(commands.Cog):
             await msg.add_reaction("✅")
             await msg.add_reaction("❌")
 
-            def check(reaction, user): 
+            def check(reaction, user):
                 return user == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == msg.id
 
             reaction, _ = await self.bot.wait_for("reaction_add", timeout=60, check=check)
@@ -112,8 +118,6 @@ class Ranking(commands.Cog):
                 progress_embed = discord.Embed(
                     title="Shift In Progress",
                     description="⏸️ Pause | ▶️ Resume | ⏹️ Stop\n⚠️ You may be asked to provide video proof of each shift up to a week after the shift ends. (This is a requirement for all shifts.)",
-                    footer="Shift started!",
-                    timestamp=start_time,
                     color=discord.Color.green()
                 )
                 progress_embed.add_field(name="Minutes Since Start", value="0", inline=False)
@@ -135,32 +139,36 @@ class Ranking(commands.Cog):
 
                 update_embed.start()
 
-                def shift_check(r, u): 
-                    return u == ctx.author and str(r.emoji) in ["⏸️", "▶️", "⏹️"] and r.message.id == shift_msg.id
+                def shift_check(reaction, user):
+                    return user == ctx.author and str(reaction.emoji) in ["⏸️", "▶️", "⏹️"] and reaction.message.id == shift_msg.id
 
                 while True:
-                    r, _ = await self.bot.wait_for("reaction_add", check=shift_check)
-                    if r.emoji == "⏸️":
-                        if not paused:
-                            paused = True
+                    try:
+                        reaction, _ = await self.bot.wait_for("reaction_add", timeout=None, check=shift_check)
+                        if str(reaction.emoji) == "⏸️":
+                            if not paused:
+                                paused = True
+                                update_embed.stop()
+                                await dm.send("⏸️ Paused.")
+                            else:
+                                await dm.send("❌ Already paused.")
+                        elif str(reaction.emoji) == "▶️":
+                            if paused:
+                                paused = False
+                                update_embed.start()
+                                await dm.send("▶️ Resumed.")
+                            else:
+                                await dm.send("❌ Already running.")
+                        elif str(reaction.emoji) == "⏹️":
                             update_embed.stop()
-                            await dm.send("⏸️ Paused.")
-                        else:
-                            await dm.send("❌ Already paused.")
-                    elif r.emoji == "▶️":
-                        if paused:
-                            paused = False
-                            update_embed.start()
-                            await dm.send("▶️ Resumed.")
-                        else:
-                            await dm.send("❌ Already running.")
-                    elif r.emoji == "⏹️":
-                        update_embed.stop()
-                        elapsed = datetime.utcnow() - self.active_shifts.pop(ctx.author.id)
-                        minutes = int(elapsed.total_seconds() // 60)
-                        print(f"DEBUG: Shift ended for user_id {ctx.author.id}. Minutes: {minutes}")  # Debugging message
-                        await self.add_shift_points(ctx.author.id, minutes, minutes)
-                        await dm.send(f"⏹️ Stopped. You earned {minutes} points.")
+                            elapsed = datetime.utcnow() - self.active_shifts.pop(ctx.author.id)
+                            minutes = int(elapsed.total_seconds() // 60)
+                            print(f"DEBUG: Shift ended for user_id {ctx.author.id}. Minutes: {minutes}")  # Debugging message
+                            await self.add_shift_points(ctx.author.id, minutes, minutes)
+                            await dm.send(f"⏹️ Stopped. You earned {minutes} points.")
+                            break
+                    except Exception as e:
+                        print(f"❌ Error in shift reaction handling: {e}")
                         break
             else:
                 await dm.send("❌ Shift start canceled.")
@@ -191,44 +199,6 @@ class Ranking(commands.Cog):
         new_points = max(0, current - amount)
         await self.set_points(member.id, new_points)
         await ctx.send(f"✅ Removed {amount} points from {member.mention}.")
-
-    @commands.command()
-    @commands.has_role("• OFFICE OF THE TASK FORCE COMMANDER •")  # Replace "ECB" with the exact name of the role
-    async def activeshifts(self, ctx):
-        """Show all users currently on an active shift."""
-        if not self.active_shifts:
-            await ctx.send("❌ No users are currently on an active shift.")
-            return
-
-        active_users = "\n".join(
-            [f"<@{user_id}> - Started at {start_time.strftime('%H:%M:%S UTC')}" 
-             for user_id, start_time in self.active_shifts.items()]
-        )
-        embed = discord.Embed(
-            title="Active Shifts",
-            description=active_users,
-            color=discord.Color.green()
-        )
-        await ctx.send(embed=embed)
-
-    @commands.command()
-    @commands.has_role("• OFFICE OF THE TASK FORCE COMMANDER •")  # Replace "ECB" with the exact name of the role
-    async def showloa(self, ctx):
-        """Show all users currently on Leave of Absence (LOA)."""
-        # Assuming you have a way to track LOA users, e.g., a dictionary or database table
-        loa_users = await self.get_loa_users()  # Replace with your actual LOA tracking logic
-
-        if not loa_users:
-            await ctx.send("❌ No users are currently on LOA.")
-            return
-
-        loa_list = "\n".join([f"<@{user_id}>" for user_id in loa_users])
-        embed = discord.Embed(
-            title="Users on LOA",
-            description=loa_list,
-            color=discord.Color.orange()
-        )
-        await ctx.send(embed=embed)
 
     async def get_loa_users(self):
         """Fetch users on LOA from the database or other storage."""

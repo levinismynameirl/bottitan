@@ -3,10 +3,13 @@ from discord.ext import commands
 import random
 import string
 from captcha.image import ImageCaptcha
+import tempfile
+import asyncio
+import os
 
 # Role IDs
-ROLE_ID_UNOFFICIAL_PERSONNEL = 1303661603006447736
-ROLE_ID_AWAITING_TRYOUT = 1303662669626081300
+ROLE_ID_UNOFFICIAL_PERSONNEL = 1303661603006447736  # Replace with your actual role ID
+ROLE_ID_AWAITING_TRYOUT = 1303662669626081300  # Replace with your actual role ID
 
 class CaptchaVerification(commands.Cog):
     def __init__(self, bot):
@@ -15,56 +18,64 @@ class CaptchaVerification(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        """Trigger verification when a new member joins."""
+        """Trigger CAPTCHA verification when a new member joins."""
         try:
-            while True:
-                # Generate CAPTCHA
-                captcha_text = self.generate_captcha_text()
-                captcha_image = self.generate_captcha_image(captcha_text)
+            # Generate CAPTCHA
+            captcha_text = self.generate_captcha_text()
+            captcha_image = self.generate_captcha_image(captcha_text)
 
-                # Create DM channel
+            # Create DM channel
+            try:
                 dm_channel = await member.create_dm()
+            except discord.Forbidden:
+                print(f"Could not send DM to {member}. Ensure the user has DMs enabled.")
+                return
 
-                # Create embed with CAPTCHA
-                embed = discord.Embed(
-                    title="CAPTCHA Verification",
-                    description=(
-                        "Hello! To prove you are not a bot, please complete this CAPTCHA verification test.\n\n"
-                        "You may retake this test as many times as you want until you get it right. "
-                        "When you do, you will gain access to the server."
-                    ),
-                    color=discord.Color.blue()
-                )
-                embed.set_image(url=f"attachment://captcha.png")
+            # Create embed with CAPTCHA
+            embed = discord.Embed(
+                title="CAPTCHA Verification",
+                description=(
+                    "Hello! To prove you are not a bot, please complete this CAPTCHA verification test.\n\n"
+                    "Type the text shown in the image below. You may retake this test as many times as needed until you get it right."
+                ),
+                color=discord.Color.blue()
+            )
+            embed.set_image(url="attachment://captcha.png")
 
-                # Send the embed with the CAPTCHA image
-                await dm_channel.send(embed=embed, file=discord.File(captcha_image, "captcha.png"))
+            # Send the embed with the CAPTCHA image
+            await dm_channel.send(embed=embed, file=discord.File(captcha_image, "captcha.png"))
 
-                # Wait for the user's response
-                def check_captcha(m):
-                    return m.author == member and m.channel == dm_channel
+            # Wait for the user's response
+            def check_captcha(m):
+                return m.author == member and m.channel == dm_channel
 
-                try:
-                    captcha_response = await self.bot.wait_for("message", timeout=120.0, check=check_captcha)
-                    if captcha_response.content.strip() == captcha_text:
-                        # Correct CAPTCHA
-                        await dm_channel.send("✅ Correct! You have passed the CAPTCHA verification.")
-                        await member.add_roles(
-                            discord.Object(id=ROLE_ID_UNOFFICIAL_PERSONNEL),
-                            discord.Object(id=ROLE_ID_AWAITING_TRYOUT)
-                        )
-                        await dm_channel.send("✅ Verification complete! You now have access to the server.")
-                        await self.log_verification_result(member, success=True)
-                        break
-                    else:
-                        # Incorrect CAPTCHA
-                        await dm_channel.send("❌ Incorrect CAPTCHA. Please try again.")
-                        await self.log_verification_result(member, success=False)
-                except discord.ext.commands.errors.CommandInvokeError:
-                    await dm_channel.send("❌ You took too long to respond. Please try again.")
+            try:
+                captcha_response = await self.bot.wait_for("message", timeout=120.0, check=check_captcha)
+                if captcha_response.content.strip().upper() == captcha_text.upper():
+                    # Correct CAPTCHA
+                    await dm_channel.send("✅ Correct! You have passed the CAPTCHA verification.")
+                    await member.add_roles(
+                        discord.Object(id=ROLE_ID_UNOFFICIAL_PERSONNEL),
+                        discord.Object(id=ROLE_ID_AWAITING_TRYOUT)
+                    )
+                    await dm_channel.send("✅ Verification complete! You now have access to the server.")
+                    await self.log_verification_result(member, success=True)
+                else:
+                    # Incorrect CAPTCHA
+                    await dm_channel.send("❌ Incorrect CAPTCHA. Please try again.")
                     await self.log_verification_result(member, success=False)
-        except discord.Forbidden:
-            print(f"Could not send DM to {member}. Ensure the user has DMs enabled.")
+                    await self.on_member_join(member)  # Restart the process
+            except asyncio.TimeoutError:
+                await dm_channel.send("❌ You took too long to respond. Please try again.")
+                await self.log_verification_result(member, success=False)
+                await self.on_member_join(member)  # Restart the process
+        finally:
+            # Clean up the CAPTCHA image file
+            if captcha_image:
+                try:
+                    os.remove(captcha_image)
+                except Exception as e:
+                    print(f"Error deleting CAPTCHA image: {e}")
 
     async def log_verification_result(self, member, success):
         """Log the result of the CAPTCHA verification."""
@@ -92,15 +103,67 @@ class CaptchaVerification(commands.Cog):
     def generate_captcha_image(self, text):
         """Generate a CAPTCHA image."""
         image = ImageCaptcha()
-        image_path = f"captcha_{text}.png"
-        image.write(text, image_path)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+            image_path = temp_file.name
+            image.write(text, image_path)
         return image_path
 
-    def generate_verification_question(self):
-        """Generate a simple verification question."""
-        num1 = random.randint(1, 10)
-        num2 = random.randint(1, 10)
-        return f"What is {num1} + {num2}?", num1 + num2
+    @commands.command(name="testcaptcha")
+    @commands.has_permissions(administrator=True)  # Restrict to administrators or specific roles
+    async def testcaptcha(self, ctx, member: discord.Member):
+        """Manually trigger CAPTCHA verification for a specific user."""
+        try:
+            # Generate CAPTCHA
+            captcha_text = self.generate_captcha_text()
+            captcha_image = self.generate_captcha_image(captcha_text)
+
+            # Create DM channel
+            try:
+                dm_channel = await member.create_dm()
+            except discord.Forbidden:
+                await ctx.send(f"❌ Could not send DM to {member.mention}. Ensure the user has DMs enabled.")
+                return
+
+            # Create embed with CAPTCHA
+            embed = discord.Embed(
+                title="CAPTCHA Verification (Test)",
+                description=(
+                    "Hello! This is a test CAPTCHA verification. Please type the text shown in the image below."
+                ),
+                color=discord.Color.blue()
+            )
+            embed.set_image(url="attachment://captcha.png")
+
+            # Send the embed with the CAPTCHA image
+            await dm_channel.send(embed=embed, file=discord.File(captcha_image, "captcha.png"))
+
+            # Wait for the user's response
+            def check_captcha(m):
+                return m.author == member and m.channel == dm_channel
+
+            try:
+                captcha_response = await self.bot.wait_for("message", timeout=120.0, check=check_captcha)
+                if captcha_response.content.strip().upper() == captcha_text.upper():
+                    # Correct CAPTCHA
+                    await dm_channel.send("✅ Correct! You have passed the CAPTCHA verification.")
+                    await ctx.send(f"✅ {member.mention} successfully passed the CAPTCHA test.")
+                    await self.log_verification_result(member, success=True)
+                else:
+                    # Incorrect CAPTCHA
+                    await dm_channel.send("❌ Incorrect CAPTCHA. Please try again.")
+                    await ctx.send(f"❌ {member.mention} failed the CAPTCHA test.")
+                    await self.log_verification_result(member, success=False)
+            except asyncio.TimeoutError:
+                await dm_channel.send("❌ You took too long to respond. Please try again.")
+                await ctx.send(f"❌ {member.mention} did not respond in time.")
+                await self.log_verification_result(member, success=False)
+        finally:
+            # Clean up the CAPTCHA image file
+            if captcha_image:
+                try:
+                    os.remove(captcha_image)
+                except Exception as e:
+                    print(f"Error deleting CAPTCHA image: {e}")
 
 async def setup(bot):
     await bot.add_cog(CaptchaVerification(bot))
