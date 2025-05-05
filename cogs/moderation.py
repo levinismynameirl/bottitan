@@ -189,7 +189,7 @@ class Moderation(commands.Cog):
     @commands.has_permissions(manage_channels=True)
     async def test(self, ctx):
         """A simple test command that replies with 'Test Ran'"""
-        await ctx.send(f"Test Ran")
+        await ctx.send(f"Advanced deployment and init tests ran successfully.")
 
     @commands.command()
     @commands.has_permissions(manage_channels=True)
@@ -338,7 +338,7 @@ class Moderation(commands.Cog):
         # Check if the user has the Official Member role
         official_member_role = ctx.guild.get_role(ROLE_ID_OFFICIAL_MEMBER)
         if official_member_role not in ctx.author.roles:
-            await ctx.send("❌ You must have the Official Member role to request an LOA.")
+            await ctx.send("❌ You must have the Official Member role to request a LOA.")
             return
 
         # Get the specific user by ID
