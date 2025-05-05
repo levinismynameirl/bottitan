@@ -170,7 +170,7 @@ class Ranking(commands.Cog):
                         await interaction.followup.send("❌ Already paused.")
                 
                 async def resume_callback(interaction):
-                    nonlocal paused
+                    nonlocal paused, update_embed
                     if interaction.user != ctx.author:
                         return
                     
@@ -178,10 +178,26 @@ class Ranking(commands.Cog):
                     
                     if paused:
                         paused = False
+                        
+                        # Recreate and restart the task - this is the key fix
+                        @tasks.loop(minutes=1)
+                        async def update_embed():
+                            if ctx.author.id in self.active_shifts:
+                                elapsed_time = datetime.utcnow() - self.active_shifts[ctx.author.id]
+                                minutes = elapsed_time.total_seconds() // 60
+                                progress_embed.set_field_at(0, name="Minutes Since Start", value=str(int(minutes)), inline=False)
+                                try:
+                                    await shift_msg.edit(embed=progress_embed)
+                                except discord.NotFound:
+                                    update_embed.cancel()
+                        
+                        # Start the newly created task
                         update_embed.start()
+                        
+                        # Update UI elements
                         pause_button.disabled = False
                         resume_button.disabled = True
-                        await shift_msg.edit(view=control_view)
+                        await shift_msg.edit(view=control_view, embed=progress_embed)
                         await interaction.followup.send("▶️ Shift resumed.")
                     else:
                         await interaction.followup.send("❌ Already running.")
