@@ -37,17 +37,17 @@ print("Bot instance created.")
 print("Loading all files...")
 async def load_extensions():
     """Loads all extensions (cogs) before running the bot."""
-    await bot.load_extension("cogs/moderation")  # Load the Moderation cog
-    await bot.load_extension("cogs/ranking")  # Load the Ranking cog
-    await bot.load_extension("cogs/misc")  # Load the Misc cog
-    await bot.load_extension("cogs/antiraid")  # Load the AntiRaid cog
-    await bot.load_extension("cogs/automod")  # Load the AutoMod cog
-    await bot.load_extension("cogs/verification")  # Load the Captcha cog
-    #await bot.load_extension("scraps/embedsend")  # Load the EmbedSend cog
-    await bot.load_extension("cogs/stats")  # Load the ServerStats cog
-    #await bot.load_extension("scraps/activityreport")  # Load the ActivityReport cog
-    #await bot.load_extension("scraps/antinuke")  # Load the antinuke cog
-    await bot.load_extension("cogs/tryout")  # Load the TryOut cog
+    await bot.load_extension("cogs.moderation")  # Load the Moderation cog
+    await bot.load_extension("cogs.ranking")  # Load the Ranking cog
+    await bot.load_extension("cogs.misc")  # Load the Misc cog
+    await bot.load_extension("cogs.antiraid")  # Load the AntiRaid cog
+    await bot.load_extension("cogs.automod")  # Load the AutoMod cog
+    await bot.load_extension("cogs.verification")  # Load the Captcha cog
+    #await bot.load_extension("scraps.embedsend")  # Load the EmbedSend cog
+    await bot.load_extension("cogs.stats")  # Load the ServerStats cog
+    #await bot.load_extension("scraps.activityreport")  # Load the ActivityReport cog
+    #await bot.load_extension("scraps.antinuke")  # Load the antinuke cog
+    await bot.load_extension("cogs.tryout")  # Load the TryOut cog
 print("All files loaded successfully.")
 
 # Event when the bot is ready
