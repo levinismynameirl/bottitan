@@ -10,6 +10,8 @@ class Tryout(commands.Cog):
         self.bot = bot
         self.tryouts = {}  # Store tryout data by tryout ID
         self.codename_approvers = [1133038563047514192, 920314437179674694]  # Replace with approver IDs
+        self.pending_approvals = {}  # Store pending codename approvals
+        self.TRYOUT_PING_ROLE_ID = 1307035073383759964
 
     async def update_management_message(self, tryout_id):
         """Update the tryout management channel message."""
@@ -88,19 +90,17 @@ class Tryout(commands.Cog):
                 await interaction.response.send_message("❌ You are already in the tryout.", ephemeral=True)
                 return
 
-            # Add participant with default points (10)
             self.tryouts[tryout_id]["participants"][interaction.user.id] = 10
+            remaining_spots = 12 - len(self.tryouts[tryout_id]["participants"])
             await interaction.response.send_message("✅ You have joined the tryout.", ephemeral=True)
 
-            # Update the announcement message with the current participants
-            participants = "\n".join(
-                [f"{interaction.guild.get_member(member_id).name}: {points} points"
-                 for member_id, points in self.tryouts[tryout_id]["participants"].items()]
-            )
+            # Update announcement message
+            participants = "\n".join([f"<@{member_id}>" for member_id in self.tryouts[tryout_id]["participants"].keys()])
             updated_embed = discord.Embed(
                 title="Tryout Announcement",
                 description=f"A tryout is starting at **{start_time.strftime('%H:%M')} UTC**.\n"
-                            f"There are **12 spaces** available.\n"
+                            f"**Host:** {ctx.author.mention}\n"
+                            f"There are **{remaining_spots} spots remaining** out of 12.\n"
                             f"Tryout ID: `{tryout_id}`\n\n"
                             f"**Participants:**\n{participants}",
                 color=discord.Color.blue()
@@ -146,19 +146,43 @@ class Tryout(commands.Cog):
             await ctx.send("❌ Could not find the tryout channel. Please check the channel ID.")
             return
 
-        # Send the initial announcement message
-        announcement_message = await tryout_channel.send(embed=embed, view=view)
+        # Send the initial announcement message with role ping
+        tryout_ping_role = ctx.guild.get_role(self.TRYOUT_PING_ROLE_ID)
+        announcement_message = await tryout_channel.send(
+            content=f"{tryout_ping_role.mention}" if tryout_ping_role else None,
+            embed=embed, 
+            view=view
+        )
 
         # Wait until the tryout starts
         await asyncio.sleep(minutes_until_start * 60)
 
-        # Create tryout management channel
+        # Disable buttons and update announcement message
+        view.clear_items()  # Remove all buttons
+        participants = "\n".join(
+            [f"<@{member_id}>: {points} points" for member_id, points in self.tryouts[tryout_id]["participants"].items()]
+        )
+        participants = participants if participants else "No participants yet."
+        updated_embed = discord.Embed(
+            title="Tryout In Progress",
+            description=f"This tryout has started at **{start_time.strftime('%H:%M')} UTC**.\n"
+                        f"**Host:** {ctx.author.mention}\n"
+                        f"Tryout ID: `{tryout_id}`\n\n"
+                        f"**Participants:**\n{participants}",
+            color=discord.Color.green()
+        )
+        await announcement_message.edit(embed=updated_embed, view=view)
+
+        # Create tryout management channel with host ping
         overwrites = {
             ctx.guild.default_role: discord.PermissionOverwrite(read_messages=False),
             ctx.author: discord.PermissionOverwrite(read_messages=True, manage_channels=True),
         }
         channel = await ctx.guild.create_text_channel(f"tryout-{tryout_id}-management", overwrites=overwrites)
         self.tryouts[tryout_id]["channel"] = channel
+
+        # Prepare the management message with host ping
+        await channel.send(f"{ctx.author.mention} Your tryout has started!")
 
         # Prepare the list of participants
         participants = "\n".join(
@@ -221,48 +245,30 @@ class Tryout(commands.Cog):
             await ctx.send("❌ Only the host or co-host can end the tryout.")
             return
 
-        passed = [member_id for member_id, points in tryout["participants"].items() if points > 20]
-        failed = [member_id for member_id, points in tryout["participants"].items() if points <= 20]
+        passed = [member_id for member_id, points in tryout["participants"].items() if points >= 20]
+        failed = [member_id for member_id, points in tryout["participants"].items() if points < 20]
+
+        # Store pending approvals
+        self.pending_approvals = {}
 
         for member_id in passed:
             member = ctx.guild.get_member(member_id)
             if member:
-                await member.send("🎉 Congratulations! You passed the tryout. Please provide your Roblox username:")
-
-                def check_username(m):
-                    return m.author == member and isinstance(m.channel, discord.DMChannel)
-
                 try:
-                    username_msg = await self.bot.wait_for("message", timeout=300, check=check_username)
-                    roblox_username = username_msg.content
+                    # Ask for Roblox username
+                    await member.send("🎉 Congratulations! You passed the tryout. Please provide your Roblox username:")
+                    roblox_response = await self.bot.wait_for(
+                        "message",
+                        timeout=300,
+                        check=lambda m: m.author == member and isinstance(m.channel, discord.DMChannel)
+                    )
+                    roblox_username = roblox_response.content
+
+                    # Ask for desired codename
+                    await self.ask_for_codename(member, roblox_username)
+
                 except asyncio.TimeoutError:
-                    await member.send("❌ You took too long to respond. Tryout process canceled.")
-                    continue
-
-                await member.send("Please provide your desired codename:")
-
-                def check_codename(m):
-                    return m.author == member and isinstance(m.channel, discord.DMChannel)
-
-                try:
-                    codename_msg = await self.bot.wait_for("message", timeout=300, check=check_codename)
-                    codename = codename_msg.content
-                except asyncio.TimeoutError:
-                    await member.send("❌ You took too long to respond. Tryout process canceled.")
-                    continue
-
-                # Send codename for approval
-                for approver_id in self.codename_approvers:
-                    approver = ctx.guild.get_member(approver_id)
-                    if approver:
-                        await approver.send(f"Codename approval request:\n"
-                                            f"User: {member.mention}\n"
-                                            f"Roblox Username: {roblox_username}\n"
-                                            f"Desired Codename: {codename}\n\n"
-                                            f"Approve or deny using the commands:\n"
-                                            f"`!approve {member.id}` or `!deny {member.id} <reason>`")
-
-                await member.send("✅ Your codename has been sent for approval. Please wait for a response.")
+                    await member.send("❌ You took too long to respond. Please contact an administrator.")
 
         for member_id in failed:
             member = ctx.guild.get_member(member_id)
@@ -271,9 +277,50 @@ class Tryout(commands.Cog):
 
         # Clean up
         channel = tryout["channel"]
-        await channel.delete()  # Delete the tryout management channel
+        await channel.delete()
         del self.tryouts[tryout_id]
         await ctx.send(f"✅ Tryout ID `{tryout_id}` has been ended.")
+
+    async def ask_for_codename(self, member, roblox_username, previous_denied=None):
+        """Ask for codename and handle approval process."""
+        if previous_denied:
+            await member.send(f"Your previous codename was denied. Reason: {previous_denied}\nPlease provide a new codename:")
+        else:
+            await member.send("Please provide your desired codename:")
+
+        try:
+            codename_response = await self.bot.wait_for(
+                "message",
+                timeout=300,
+                check=lambda m: m.author == member and isinstance(m.channel, discord.DMChannel)
+            )
+            codename = codename_response.content
+
+            # Store in pending approvals
+            self.pending_approvals[member.id] = {
+                "codename": codename,
+                "roblox_username": roblox_username
+            }
+
+            # Send approval requests to approvers
+            for approver_id in self.codename_approvers:
+                approver = member.guild.get_member(approver_id)
+                if approver:
+                    embed = discord.Embed(
+                        title="Codename Approval Request",
+                        description=f"User: {member.mention}\n"
+                                    f"Roblox Username: {roblox_username}\n"
+                                    f"Desired Codename: {codename}\n\n"
+                                    f"Use `!approve {member.id}` to approve\n"
+                                    f"Use `!deny {member.id} <reason>` to deny",
+                        color=discord.Color.blue()
+                    )
+                    await approver.send(embed=embed)
+
+            await member.send("✅ Your codename has been sent for approval. Please wait for a response.")
+
+        except asyncio.TimeoutError:
+            await member.send("❌ You took too long to respond. Please contact an administrator.")
 
     @commands.command()
     async def approve(self, ctx, member_id: int):
@@ -282,31 +329,37 @@ class Tryout(commands.Cog):
             await ctx.send("❌ You do not have permission to approve codenames.")
             return
 
+        if member_id not in self.pending_approvals:
+            await ctx.send("❌ No pending approval found for this user.")
+            return
+
         member = ctx.guild.get_member(member_id)
         if not member:
             await ctx.send("❌ Member not found.")
             return
 
-        # Assign roles and update nickname
+        approval_data = self.pending_approvals[member_id]
+        nickname = f"\"{approval_data['codename']}\" | {approval_data['roblox_username']}"
+
+        # Add roles and update nickname
         recruit_role = discord.utils.get(ctx.guild.roles, name="Recruit")
-        official_member_role = discord.utils.get(ctx.guild.roles, name="Official Member")
-        unofficial_member_role = discord.utils.get(ctx.guild.roles, name="Unofficial Member")
+        official_role = discord.utils.get(ctx.guild.roles, name="Official Member")
         visitor_role = discord.utils.get(ctx.guild.roles, name="Visitor")
+        unofficial_role = discord.utils.get(ctx.guild.roles, name="Unofficial Member")
 
-        if recruit_role:
-            await member.add_roles(recruit_role)
-        if official_member_role:
-            await member.add_roles(official_member_role)
-        if unofficial_member_role:
-            await member.remove_roles(unofficial_member_role)
-        if visitor_role:
-            await member.remove_roles(visitor_role)
+        try:
+            await member.edit(nick=nickname)
+            if recruit_role: await member.add_roles(recruit_role)
+            if official_role: await member.add_roles(official_role)
+            if visitor_role: await member.remove_roles(visitor_role)
+            if unofficial_role: await member.remove_roles(unofficial_role)
 
-        # Update nickname
-        nickname = f"{member.display_name.split('|')[0].strip()} | {member.display_name.split('|')[-1].strip()}"
-        await member.edit(nick=nickname)
+            await member.send(f"✅ Your codename has been approved! Your nickname has been updated to: {nickname}")
+            await ctx.send(f"✅ Approved codename for {member.mention}")
+            del self.pending_approvals[member_id]
 
-        await ctx.send(f"✅ Codename approved for {member.mention}.")
+        except discord.Forbidden:
+            await ctx.send("❌ I don't have permission to update roles or nickname.")
 
     @commands.command()
     async def deny(self, ctx, member_id: int, *, reason: str):
@@ -315,15 +368,18 @@ class Tryout(commands.Cog):
             await ctx.send("❌ You do not have permission to deny codenames.")
             return
 
+        if member_id not in self.pending_approvals:
+            await ctx.send("❌ No pending approval found for this user.")
+            return
+
         member = ctx.guild.get_member(member_id)
         if not member:
             await ctx.send("❌ Member not found.")
             return
 
-        await member.send(f"❌ Your codename request has been denied for the following reason:\n{reason}\n"
-                          f"Please provide a new codename for approval.")
-
-        await ctx.send(f"✅ Codename denied for {member.mention}. Reason: {reason}")
+        approval_data = self.pending_approvals[member_id]
+        await self.ask_for_codename(member, approval_data['roblox_username'], reason)
+        await ctx.send(f"✅ Denied codename for {member.mention}")
 
     @commands.command(name="addscore")
     async def addscore(self, ctx, tryout_id: int, member: discord.Member, points: int):
