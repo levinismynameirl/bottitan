@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime
 
 # Constants
-MOD_CHANNEL_ID = 1234567890  # Replace with your moderator channel ID
+MOD_CHANNEL_ID = 1303811489928445952  # Replace with your moderator channel ID
 startup_logs = []
 
 def log(message: str):
