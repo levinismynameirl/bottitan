@@ -7,7 +7,7 @@ class AutoMod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.bad_words = [
-            "fuck you", "whore",
+            "cunt", "whore"
             "nigger", "nigga", "niga", "retard", "slut", "thisisatestbadwordtoseeifthebotworks"
         ]  # Add actual bad words here
         self.muted_role_name = "Muted"  # Name of the mute role

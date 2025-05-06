@@ -4,6 +4,7 @@ from discord.ui import Button, View
 from datetime import datetime, timedelta
 import asyncio
 import time
+import json
 
 class Tryout(commands.Cog):
     def __init__(self, bot):
@@ -12,6 +13,53 @@ class Tryout(commands.Cog):
         self.codename_approvers = [1133038563047514192, 920314437179674694]  # Replace with approver IDs
         self.pending_approvals = {}  # Store pending codename approvals
         self.TRYOUT_PING_ROLE_ID = 1307035073383759964
+        self.pool = None  # Will be set when database connection is established
+
+    async def save_tryout_to_db(self, tryout_id: int):
+        """Save tryout data to database."""
+        tryout = self.tryouts[tryout_id]
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO tryouts (
+                    tryout_id, host_id, cohost_id, start_time, participants
+                ) VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (tryout_id) 
+                DO UPDATE SET 
+                    cohost_id = $3,
+                    participants = $5
+            """, tryout_id, 
+                tryout["host"].id,
+                tryout["co_host"].id if tryout["co_host"] else None,
+                tryout["start_time"],
+                json.dumps({str(k): v for k, v in tryout["participants"].items()})
+            )
+
+    async def end_tryout_in_db(self, tryout_id: int):
+        """Mark tryout as ended in database with final scores."""
+        tryout = self.tryouts[tryout_id]
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                UPDATE tryouts 
+                SET status = 'ended',
+                    end_time = CURRENT_TIMESTAMP,
+                    participants = $1
+                WHERE tryout_id = $2
+            """, 
+                json.dumps({str(k): v for k, v in tryout["participants"].items()}),
+                tryout_id
+            )
+
+    async def load_tryouts_from_db(self):
+        """Load active tryouts from database on bot startup."""
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM tryouts WHERE status = 'active'")
+            for row in rows:
+                self.tryouts[row['tryout_id']] = {
+                    "host": await self.bot.fetch_user(row['host_id']),
+                    "co_host": await self.bot.fetch_user(row['cohost_id']) if row['cohost_id'] else None,
+                    "participants": {int(k): v for k, v in json.loads(row['participants']).items()},
+                    "start_time": row['start_time']
+                }
 
     async def update_management_message(self, tryout_id):
         """Update the tryout management channel message."""
@@ -62,6 +110,7 @@ class Tryout(commands.Cog):
             "participants": {},
             "start_time": start_time,
         }
+        await self.save_tryout_to_db(tryout_id)  # Save initial tryout data
 
         embed = discord.Embed(
             title="Tryout Announcement",
@@ -91,6 +140,7 @@ class Tryout(commands.Cog):
                 return
 
             self.tryouts[tryout_id]["participants"][interaction.user.id] = 10
+            await self.save_tryout_to_db(tryout_id)  # Save updated participants
             remaining_spots = 12 - len(self.tryouts[tryout_id]["participants"])
             await interaction.response.send_message("✅ You have joined the tryout.", ephemeral=True)
 
@@ -114,6 +164,7 @@ class Tryout(commands.Cog):
                 return
 
             del self.tryouts[tryout_id]["participants"][interaction.user.id]  # Remove participant
+            await self.save_tryout_to_db(tryout_id)  # Save updated participants
             await interaction.response.send_message("✅ You have left the tryout.", ephemeral=True)
 
             # Update the announcement message with the current participants
@@ -229,6 +280,7 @@ class Tryout(commands.Cog):
             return
 
         tryout["co_host"] = member
+        await self.save_tryout_to_db(tryout_id)  # Save updated co-host
         channel = tryout["channel"]
         await channel.set_permissions(member, read_messages=True, manage_channels=True)
         await ctx.send(f"✅ {member.mention} has been set as the co-host for Tryout ID `{tryout_id}`.")
@@ -278,6 +330,7 @@ class Tryout(commands.Cog):
         # Clean up
         channel = tryout["channel"]
         await channel.delete()
+        await self.end_tryout_in_db(tryout_id)  # Save final state
         del self.tryouts[tryout_id]
         await ctx.send(f"✅ Tryout ID `{tryout_id}` has been ended.")
 
@@ -422,6 +475,7 @@ class Tryout(commands.Cog):
             return
 
         tryout["participants"][member.id] += points
+        await self.save_tryout_to_db(tryout_id)  # Save updated participants
         await ctx.send(f"✅ Added {points} points to {member.mention}.")
         await self.update_management_message(tryout_id)
 
@@ -442,6 +496,7 @@ class Tryout(commands.Cog):
             return
 
         tryout["participants"][member.id] -= points
+        await self.save_tryout_to_db(tryout_id)  # Save updated participants
         await ctx.send(f"✅ Removed {points} points from {member.mention}.")
         await self.update_management_message(tryout_id)
 
@@ -460,6 +515,7 @@ class Tryout(commands.Cog):
         for member_id in tryout["participants"]:
             tryout["participants"][member_id] += points
 
+        await self.save_tryout_to_db(tryout_id)  # Save updated participants
         await ctx.send(f"✅ Added {points} points to all participants.")
         await self.update_management_message(tryout_id)
 
@@ -478,6 +534,7 @@ class Tryout(commands.Cog):
         for member_id in tryout["participants"]:
             tryout["participants"][member_id] -= points
 
+        await self.save_tryout_to_db(tryout_id)  # Save updated participants
         await ctx.send(f"✅ Removed {points} points from all participants.")
         await self.update_management_message(tryout_id)
 
@@ -501,5 +558,48 @@ class Tryout(commands.Cog):
         )
         await ctx.send(embed=embed)
 
+    @commands.command()
+    async def helptt(self, ctx):
+        """Show all tryout-related commands. Only works in tryout management channels."""
+        # Check if the command is used in a tryout management channel
+        if not ctx.channel.name.startswith("tryout-") or not ctx.channel.name.endswith("-management"):
+            await ctx.send("❌ This command can only be used in tryout management channels.")
+            return
+
+        embed = discord.Embed(
+            title="Tryout System Commands",
+            description="All available commands for managing tryouts.",
+            color=discord.Color.blue()
+        )
+
+        # Host Management
+        embed.add_field(
+            name="🎮 Host Commands",
+            value="""
+`!setcohost <tryout_id> <member>` - Set another member as co-host
+`!endtryout <tryout_id>` - End the tryout and process results
+            """,
+            inline=False
+        )
+
+        # Score Management
+        embed.add_field(
+            name="📊 Score Commands",
+            value="""
+`!addscore <tryout_id> <member> <points>` - Add points to a participant
+`!removescore <tryout_id> <member> <points>` - Remove points from a participant
+`!addscoreall <tryout_id> <points>` - Add points to all participants
+`!removescoreall <tryout_id> <points>` - Remove points from all participants
+`!showpoints <tryout_id>` - Display current points of all participants
+            """,
+            inline=False
+        )
+
+        embed.set_footer(text="Only the host and co-host can use these commands")
+        await ctx.send(embed=embed)
+
 async def setup(bot):
-    await bot.add_cog(Tryout(bot))
+    cog = Tryout(bot)
+    cog.pool = bot.pool  # Assuming you've set bot.pool in your main bot file
+    await cog.load_tryouts_from_db()  # Load any active tryouts
+    await bot.add_cog(cog)
