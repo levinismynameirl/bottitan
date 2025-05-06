@@ -325,41 +325,65 @@ class Tryout(commands.Cog):
     @commands.command()
     async def approve(self, ctx, member_id: int):
         """Approve a codename."""
-        if ctx.author.id not in self.codename_approvers:
-            await ctx.send("❌ You do not have permission to approve codenames.")
-            return
-
-        if member_id not in self.pending_approvals:
-            await ctx.send("❌ No pending approval found for this user.")
-            return
-
-        member = ctx.guild.get_member(member_id)
-        if not member:
-            await ctx.send("❌ Member not found.")
-            return
-
-        approval_data = self.pending_approvals[member_id]
-        nickname = f"\"{approval_data['codename']}\" | {approval_data['roblox_username']}"
-
-        # Add roles and update nickname
-        recruit_role = discord.utils.get(ctx.guild.roles, name="Recruit")
-        official_role = discord.utils.get(ctx.guild.roles, name="Official Member")
-        visitor_role = discord.utils.get(ctx.guild.roles, name="Visitor")
-        unofficial_role = discord.utils.get(ctx.guild.roles, name="Unofficial Member")
-
         try:
-            await member.edit(nick=nickname)
-            if recruit_role: await member.add_roles(recruit_role)
-            if official_role: await member.add_roles(official_role)
-            if visitor_role: await member.remove_roles(visitor_role)
-            if unofficial_role: await member.remove_roles(unofficial_role)
+            # Check if approver is authorized
+            if ctx.author.id not in self.codename_approvers:
+                await ctx.send("❌ You do not have permission to approve codenames.")
+                return
 
-            await member.send(f"✅ Your codename has been approved! Your nickname has been updated to: {nickname}")
-            await ctx.send(f"✅ Approved codename for {member.mention}")
-            del self.pending_approvals[member_id]
+            if member_id not in self.pending_approvals:
+                await ctx.send("❌ No pending approval found for this user.")
+                return
 
-        except discord.Forbidden:
-            await ctx.send("❌ I don't have permission to update roles or nickname.")
+            # Get the guild from the bot's cached guilds
+            guild = None
+            for g in self.bot.guilds:
+                if any(member.id == ctx.author.id for member in g.members):
+                    guild = g
+                    break
+
+            if not guild:
+                await ctx.send("❌ Couldn't find the server.")
+                return
+
+            member = guild.get_member(member_id)
+            if not member:
+                await ctx.send("❌ Member not found.")
+                return
+
+            approval_data = self.pending_approvals[member_id]
+            nickname = f"\"{approval_data['codename']}\" | {approval_data['roblox_username']}"
+
+            # Get roles
+            recruit_role = discord.utils.get(guild.roles, name="Recruit")
+            official_role = discord.utils.get(guild.roles, name="Official Member")
+            visitor_role = discord.utils.get(guild.roles, name="Visitor")
+            unofficial_role = discord.utils.get(guild.roles, name="Unofficial Member")
+
+            if not recruit_role or not official_role:
+                await ctx.send("❌ Required roles not found.")
+                return
+
+            try:
+                await member.edit(nick=nickname)
+                await member.add_roles(recruit_role)
+                await member.add_roles(official_role)
+                if visitor_role: await member.remove_roles(visitor_role)
+                if unofficial_role: await member.remove_roles(unofficial_role)
+
+                await member.send(f"✅ Your codename has been approved! Your nickname has been updated to: {nickname}")
+                await ctx.send(f"✅ Approved codename for {member.mention}")
+                
+                # Clean up pending approval
+                del self.pending_approvals[member_id]
+
+            except discord.Forbidden as e:
+                await ctx.send(f"❌ Permission error: {str(e)}")
+            except Exception as e:
+                await ctx.send(f"❌ An error occurred: {str(e)}")
+
+        except Exception as e:
+            await ctx.send(f"❌ An unexpected error occurred: {str(e)}")
 
     @commands.command()
     async def deny(self, ctx, member_id: int, *, reason: str):

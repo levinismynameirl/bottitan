@@ -49,24 +49,19 @@ class CaptchaVerification(commands.Cog):
             def check_captcha(m):
                 return m.author == member and m.channel == dm_channel
 
-            try:
-                captcha_response = await self.bot.wait_for("message", timeout=120.0, check=check_captcha)
-                if captcha_response.content.strip().upper() == captcha_text.upper():
-                    # Correct CAPTCHA
-                    await dm_channel.send("✅ Correct! You have passed the CAPTCHA verification.")
-                    await member.add_roles(
-                        discord.Object(id=ROLE_ID_UNOFFICIAL_PERSONNEL),
-                        discord.Object(id=ROLE_ID_AWAITING_TRYOUT)
-                    )
-                    await dm_channel.send("✅ Verification complete! You now have access to the server.")
-                    await self.log_verification_result(member, success=True)
-                else:
-                    # Incorrect CAPTCHA
-                    await dm_channel.send("❌ Incorrect CAPTCHA. Please try again.")
-                    await self.log_verification_result(member, success=False)
-                    await self.on_member_join(member)  # Restart the process
-            except asyncio.TimeoutError:
-                await dm_channel.send("❌ You took too long to respond. Please try again.")
+            captcha_response = await self.bot.wait_for("message", check=check_captcha)  # Removed timeout
+            if captcha_response.content.strip().upper() == captcha_text.upper():
+                # Correct CAPTCHA
+                await dm_channel.send("✅ Correct! You have passed the CAPTCHA verification.")
+                await member.add_roles(
+                    discord.Object(id=ROLE_ID_UNOFFICIAL_PERSONNEL),
+                    discord.Object(id=ROLE_ID_AWAITING_TRYOUT)
+                )
+                await dm_channel.send("✅ Verification complete! You now have access to the server.")
+                await self.log_verification_result(member, success=True)
+            else:
+                # Incorrect CAPTCHA
+                await dm_channel.send("❌ Incorrect CAPTCHA. Please try again.")
                 await self.log_verification_result(member, success=False)
                 await self.on_member_join(member)  # Restart the process
         finally:
