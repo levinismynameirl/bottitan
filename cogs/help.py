@@ -78,7 +78,7 @@ class CustomHelp(commands.Cog):
             return False
 
     @commands.command()
-    async def help(self, ctx, category_or_command: Optional[str] = None):
+    async def dhelp(self, ctx, category_or_command: Optional[str] = None):
         """Show help for all commands or a specific category/command."""
         
         if not category_or_command:
