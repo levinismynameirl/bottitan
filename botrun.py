@@ -83,7 +83,7 @@ async def load_extensions():
         "cogs.automod",
         "cogs.verification",
         "cogs.stats",
-        "cogs.tryout"
+        "cogs.tryout",
         "cogs.help"
     ]
     
