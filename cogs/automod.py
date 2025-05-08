@@ -3,6 +3,107 @@ from discord.ext import commands
 import asyncio
 from datetime import datetime, timedelta
 
+
+"""
+
+WARNING:
+
+
+THE LINES BELOW MAY CONTAIN SLURS OR OTHER OFFENSIVE LANGUAGE.
+THEY ARE ONLY HERE FOR AUTOMOD PURPOSES.
+
+PROCEED WITH CAUTION.
+
+
+
+SKIP TO LINE 107 FOR THE CODE.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+YOU HAVE BEEN WARNED.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+
+
 class AutoMod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
