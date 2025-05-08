@@ -84,7 +84,7 @@ async def load_extensions():
         "cogs.verification",
         "cogs.stats",
         "cogs.tryout",
-        "cogs.help"
+        #"cogs.help"
     ]
     
     for extension in extensions:
