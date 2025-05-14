@@ -86,6 +86,13 @@ class Tryout(commands.Cog):
         else:
             tryout["management_message"] = await channel.send(embed=embed)
 
+    async def get_next_tryout_id(self):
+        """Get the next available tryout ID from the database."""
+        async with self.pool.acquire() as conn:
+            # Get the highest tryout_id from the database
+            result = await conn.fetchval("SELECT MAX(tryout_id) FROM tryouts")
+            return (result or 0) + 1  # If no tryouts exist, start with 1
+
     @commands.command()
     @commands.has_permissions(manage_channels=True)
     async def tryoutstart(self, ctx):
@@ -102,8 +109,15 @@ class Tryout(commands.Cog):
             await ctx.send("❌ You took too long to respond. Tryout setup canceled.")
             return
 
+        # Get the next tryout ID from database
+        try:
+            tryout_id = await self.get_next_tryout_id()
+        except Exception as e:
+            await ctx.send("❌ Failed to generate tryout ID. Please try again.")
+            print(f"Error generating tryout ID: {e}")
+            return
+
         start_time = datetime.utcnow() + timedelta(minutes=minutes_until_start)
-        tryout_id = len(self.tryouts) + 1
         self.tryouts[tryout_id] = {
             "host": ctx.author,
             "co_host": None,
