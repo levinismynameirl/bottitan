@@ -16,6 +16,21 @@ class Ranking(commands.Cog):
         self.shift_embeds = {}
         self.pool = None  # DB pool
 
+        # Define rank roles with their point requirements
+        self.rank_roles = [
+            {"points": 10500, "role_id": 1303625392371929118, "name": "Squadron Leader"},           # Replace with actual role ID
+            {"points": 8000, "role_id": 1303653644201103390, "name": "Team Leader"},          # Replace with actual role ID
+            {"points": 5500, "role_id": 1303655086140035084, "name": "Staff Sergeant"},           # Replace with actual role ID
+            {"points": 3750, "role_id": 1303656773458202708, "name": "Sergeant"},
+            {"points": 3750, "role_id": 1303624916624740413, "name": "Non Commissioned Officer"},          # Replace with actual role ID
+            {"points": 2000, "role_id": 1303658500110553108, "name": "Elite Operative"},     # Replace with actual role ID
+            {"points": 1200, "role_id": 1303658805850148968, "name": "Senior Operative"},
+            {"points": 1200, "role_id": 1303657384216100914, "name": "Senior Personnel"},     # Replace with actual role ID
+            {"points": 600, "role_id": 1303660033820725300, "name": "Operative"},            # Replace with actual role ID
+            {"points": 0, "role_id": 1303660168307015712, "name": "Jr. Operative"},           # Replace with actual role ID
+            {"points": 0, "role_id": 1303660480480673812, "name": "Recruit"}        # Replace with actual role ID
+        ]
+
     async def setup_db(self):
         if not self.pool:
             try:
@@ -282,6 +297,85 @@ class Ranking(commands.Cog):
         new_points = max(0, current - amount)
         await self.set_points(member.id, new_points)
         await ctx.send(f"✅ Removed {amount} points from {member.mention}.")
+
+    @commands.command()
+    async def rankupd(self, ctx):
+        """Update user's roles based on their points"""
+        try:
+            # Get user's current points
+            points = await self.get_points(ctx.author.id)
+            print(f"DEBUG: Checking ranks for {ctx.author} with {points} points")
+
+            # Get all roles user should have based on points
+            roles_to_add = []
+            highest_achieved = None
+            
+            for rank in self.rank_roles:
+                if points >= rank["points"]:
+                    role = ctx.guild.get_role(rank["role_id"])
+                    if role:
+                        roles_to_add.append(role)
+                        highest_achieved = rank["name"]
+            
+            if not roles_to_add:
+                await ctx.send("❌ You don't have enough points for any rank ups yet.")
+                return
+                
+            # Get user's current rank roles
+            current_rank_roles = [
+                role for role in ctx.author.roles 
+                if role.id in [r["role_id"] for r in self.rank_roles]
+            ]
+            
+            # Check if there are any changes needed
+            roles_to_add_set = set(roles_to_add)
+            current_roles_set = set(current_rank_roles)
+            
+            if roles_to_add_set == current_roles_set:
+                await ctx.send(
+                    f"✨ No rank changes needed. You're currently at: {highest_achieved} "
+                    f"with {points} points"
+                )
+                return
+                
+            # Remove old rank roles and add new ones
+            try:
+                await ctx.author.remove_roles(*current_rank_roles, reason="Rank update")
+                await ctx.author.add_roles(*roles_to_add, reason="Rank update")
+                
+                embed = discord.Embed(
+                    title="🎉 Rank Update",
+                    description=f"Congratulations {ctx.author.mention}!",
+                    color=discord.Color.gold()
+                )
+                embed.add_field(
+                    name="Current Points", 
+                    value=str(points),
+                    inline=False
+                )
+                embed.add_field(
+                    name="Highest Rank Achieved",
+                    value=highest_achieved,
+                    inline=False
+                )
+                embed.add_field(
+                    name="Roles Updated",
+                    value="\n".join([f"- {role.name}" for role in roles_to_add]),
+                    inline=False
+                )
+                
+                await ctx.send(embed=embed)
+                print(f"DEBUG: Updated roles for {ctx.author} to {highest_achieved}")
+                
+            except discord.Forbidden:
+                await ctx.send("❌ I don't have permission to manage roles.")
+            except Exception as e:
+                await ctx.send(f"❌ An error occurred while updating roles: {e}")
+                print(f"DEBUG: Error updating roles: {e}")
+                
+        except Exception as e:
+            await ctx.send(f"❌ An error occurred: {e}")
+            print(f"Error in rankupd: {e}")
 
     async def get_loa_users(self):
         """Fetch users on LOA from the database or other storage."""
