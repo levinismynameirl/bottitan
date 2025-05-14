@@ -405,5 +405,14 @@ class Moderation(commands.Cog):
             await ctx.author.send(f"❌ Your LOA request has been declined.\n**Reason:** {decline_reason.content}")
             await admin.send("❌ You have declined the LOA request.")
 
+    @commands.command(name="restart")
+    @commands.has_permissions(administrator=True)
+    async def restart(ctx):
+        """Restart the bot."""
+        await ctx.send("🔄 Restarting the bot...")
+        await ctx.bot.close()
+        await asyncio.sleep(2)  # Wait for a moment before restarting
+        await python.run("botrun.py")
+
 async def setup(bot):
     await bot.add_cog(Moderation(bot))

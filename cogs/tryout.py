@@ -617,3 +617,5 @@ async def setup(bot):
     cog.pool = bot.pool  # Assuming you've set bot.pool in your main bot file
     await cog.load_tryouts_from_db()  # Load any active tryouts
     await bot.add_cog(cog)
+
+#just to restart the bot
