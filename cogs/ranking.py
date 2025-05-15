@@ -310,12 +310,14 @@ class Ranking(commands.Cog):
             roles_to_add = []
             highest_achieved = None
             
-            for rank in self.rank_roles:
+            # Iterate through ranks in reverse to find highest first
+            for rank in reversed(self.rank_roles):
                 if points >= rank["points"]:
+                    if not highest_achieved:  # Only set if not already set
+                        highest_achieved = rank["name"]
                     role = ctx.guild.get_role(rank["role_id"])
                     if role:
                         roles_to_add.append(role)
-                        highest_achieved = rank["name"]
             
             if not roles_to_add:
                 await ctx.send("❌ You don't have enough points for any rank ups yet.")

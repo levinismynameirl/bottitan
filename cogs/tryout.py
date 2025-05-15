@@ -282,7 +282,35 @@ class Tryout(commands.Cog):
         self.tryouts[tryout_id]["management_message"] = management_message
 
     @commands.command()
-    async def setcohost(self, ctx, tryout_id: int, member: discord.Member):
+    async def points(self, ctx, *, member: discord.Member = None):
+        """Show points for a member"""
+        if member is None:
+            member = ctx.author
+
+        # Find the tryout where the member is a participant
+        tryout_id = None
+        for tid, tryout in self.tryouts.items():
+            if member.id in tryout["participants"]:
+                tryout_id = tid
+                break
+
+        if tryout_id is None:
+            await ctx.send("❌ You are not a participant in any active tryouts.")
+            return
+
+        tryout = self.tryouts[tryout_id]
+        points = tryout["participants"][member.id]
+
+        embed = discord.Embed(
+            title=f"Tryout Points - ID `{tryout_id}`",
+            description=f"**Member:** {member.mention}\n"
+                        f"**Points:** {points}",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    async def setcohost(self, ctx, tryout_id: int, *, member: discord.Member):
         """Set a co-host for the tryout."""
         if tryout_id not in self.tryouts:
             await ctx.send("❌ Invalid tryout ID.")
@@ -390,7 +418,7 @@ class Tryout(commands.Cog):
             await member.send("❌ You took too long to respond. Please contact an administrator.")
 
     @commands.command()
-    async def approve(self, ctx, member_id: int):
+    async def approve(self, ctx, *, member_id: int):
         """Approve a codename."""
         try:
             # Check if approver is authorized
@@ -473,7 +501,7 @@ class Tryout(commands.Cog):
         await ctx.send(f"✅ Denied codename for {member.mention}")
 
     @commands.command(name="addscore")
-    async def addscore(self, ctx, tryout_id: int, member: discord.Member, points: int):
+    async def addscore(self, ctx, tryout_id: int, *, member: discord.Member, points: int):
         """Add points to a participant."""
         if tryout_id not in self.tryouts:
             await ctx.send("❌ Invalid tryout ID.")
@@ -494,7 +522,7 @@ class Tryout(commands.Cog):
         await self.update_management_message(tryout_id)
 
     @commands.command(name="removescore")
-    async def removescore(self, ctx, tryout_id: int, member: discord.Member, points: int):
+    async def removescore(self, ctx, tryout_id: int, *, member: discord.Member, points: int):
         """Remove points from a participant."""
         if tryout_id not in self.tryouts:
             await ctx.send("❌ Invalid tryout ID.")
