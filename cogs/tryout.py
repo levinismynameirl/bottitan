@@ -310,7 +310,7 @@ class Tryout(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def setcohost(self, ctx, tryout_id: int, *, member: discord.Member):
+    async def setcohost(self, ctx, tryout_id: int, member: discord.Member):
         """Set a co-host for the tryout."""
         if tryout_id not in self.tryouts:
             await ctx.send("❌ Invalid tryout ID.")
@@ -418,7 +418,7 @@ class Tryout(commands.Cog):
             await member.send("❌ You took too long to respond. Please contact an administrator.")
 
     @commands.command()
-    async def approve(self, ctx, *, member_id: int):
+    async def approve(self, ctx, member_id: int):
         """Approve a codename."""
         try:
             # Check if approver is authorized
@@ -642,8 +642,11 @@ class Tryout(commands.Cog):
 
 async def setup(bot):
     cog = Tryout(bot)
-    cog.pool = bot.pool  # Assuming you've set bot.pool in your main bot file
-    await cog.load_tryouts_from_db()  # Load any active tryouts
+    if hasattr(bot, 'pool'):
+        cog.pool = bot.pool
+    else:
+        print("Warning: Bot has no pool attribute")
+    await cog.load_tryouts_from_db()
     await bot.add_cog(cog)
 
 #just to restart the bot
