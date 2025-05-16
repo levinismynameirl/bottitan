@@ -615,6 +615,5 @@ class Tryout(commands.Cog):
 
 async def setup(bot):
     cog = Tryout(bot)
-    cog.pool = bot.pool  # Assuming you've set bot.pool in your main bot file
-    await cog.load_tryouts_from_db()  # Load any active tryouts
+    cog.pool = bot.pool  # Assuming you've set bot.pool in your main bot file  # Load any active tryouts
     await bot.add_cog(cog)
