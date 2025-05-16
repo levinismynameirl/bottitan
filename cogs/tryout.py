@@ -98,7 +98,7 @@ class Tryout(commands.Cog):
     async def tryoutstart(self, ctx):
         """Start a tryout."""
         await ctx.send("How many minutes until the tryout starts?")
-        
+
         def check(m):
             return m.author == ctx.author and m.channel == ctx.channel and m.content.isdigit()
 
@@ -282,34 +282,6 @@ class Tryout(commands.Cog):
         self.tryouts[tryout_id]["management_message"] = management_message
 
     @commands.command()
-    async def points(self, ctx, member: discord.Member = None):
-        """Show points for a member"""
-        if member is None:
-            member = ctx.author
-
-        # Find the tryout where the member is a participant
-        tryout_id = None
-        for tid, tryout in self.tryouts.items():
-            if member.id in tryout["participants"]:
-                tryout_id = tid
-                break
-
-        if tryout_id is None:
-            await ctx.send("❌ You are not a participant in any active tryouts.")
-            return
-
-        tryout = self.tryouts[tryout_id]
-        points = tryout["participants"][member.id]
-
-        embed = discord.Embed(
-            title=f"Tryout Points - ID `{tryout_id}`",
-            description=f"**Member:** {member.mention}\n"
-                        f"**Points:** {points}",
-            color=discord.Color.blue()
-        )
-        await ctx.send(embed=embed)
-
-    @commands.command()
     async def setcohost(self, ctx, tryout_id: int, member: discord.Member):
         """Set a co-host for the tryout."""
         if tryout_id not in self.tryouts:
@@ -468,7 +440,7 @@ class Tryout(commands.Cog):
 
                 await member.send(f"✅ Your codename has been approved! Your nickname has been updated to: {nickname}")
                 await ctx.send(f"✅ Approved codename for {member.mention}")
-                
+
                 # Clean up pending approval
                 del self.pending_approvals[member_id]
 
@@ -642,11 +614,6 @@ class Tryout(commands.Cog):
 
 async def setup(bot):
     cog = Tryout(bot)
-    if hasattr(bot, 'pool'):
-        cog.pool = bot.pool
-    else:
-        print("Warning: Bot has no pool attribute")
-    await cog.load_tryouts_from_db()
+    cog.pool = bot.pool  # Assuming you've set bot.pool in your main bot file
+    await cog.load_tryouts_from_db()  # Load any active tryouts
     await bot.add_cog(cog)
-
-#just to restart the bot
