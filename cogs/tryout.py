@@ -201,7 +201,7 @@ class Tryout(commands.Cog):
         join_button.callback = join_callback
         leave_button.callback = leave_callback
 
-        view = View()
+        view = View(timeout=None)  # Set timeout to None for persistent buttons
         view.add_item(join_button)
         view.add_item(leave_button)
 
