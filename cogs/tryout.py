@@ -201,7 +201,8 @@ class Tryout(commands.Cog):
         join_button.callback = join_callback
         leave_button.callback = leave_callback
 
-        view = View(timeout=None)  # Set timeout to None for persistent buttons
+        # Change this part:
+        view = View(timeout=(minutes_until_start * 60))  # Set timeout to match tryout start time
         view.add_item(join_button)
         view.add_item(leave_button)
 
