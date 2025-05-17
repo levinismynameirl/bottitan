@@ -80,7 +80,7 @@ async def load_extensions():
         "cogs.ranking",
         "cogs.misc",
         "cogs.antiraid",
-        "cogs.automod",
+        #"cogs.automod",
         "cogs.verification",
         "cogs.stats",
         "cogs.tryout",
