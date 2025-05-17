@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 import asyncio
 from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
 
 
 """
@@ -107,10 +109,9 @@ YOU HAVE BEEN WARNED.
 class AutoMod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bad_words = [
-            "cunt", "whore"
-            "nigger", "nigga", "niga", "retard", "slut", "thisisatestbadwordtoseeifthebotworks"
-        ]  # Add actual bad words here
+        load_dotenv()
+        bad_words_env = os.getenv("BAD_WORDS", "")
+        self.bad_words = [w.strip().lower() for w in bad_words_env.split(",") if w.strip()]
         self.muted_role_name = "Muted"  # Name of the mute role
 
     @commands.Cog.listener()
