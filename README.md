@@ -1,88 +1,116 @@
-# Titan One OS - Discord Bot (Name Outdated)
+# Titan One OS - Discord Bot
 
-Titan One OS is a custom Discord bot designed for the **Titan One SCP Faction Server**. The bot provides various moderation and utility commands to help manage the server efficiently. Below is a detailed guide on how to use the bot, including its commands and functionality.
-
-## NOTE: EVERYTHING BELOW MAY BE OUTDATED. ASK DEV FOR OFFICIAL COMMANDS
+O.R.A.C.L.E. is a custom Discord bot for the **Titan One SCP Faction Server**. It provides moderation, tryout management, ranking, utility, anti-raid, automod, verification, and statistics features.
 
 ---
 
-## **How to Run the Bot**
-To start the bot, use the following command in the terminal:
+## Features
 
-```
-python [botrun.py](http://_vscodecontentref_/1)
-```
+- **Moderation:** Lock/unlock/slowmode channels, clear messages, kick/ban/mute/unmute/timeout users, LOA requests, and audit logging.
+- **Tryout System:** Host tryouts, manage participants, assign co-hosts, score participants, approve/deny codenames, and automate tryout management.
+- **Ranking:** Points system, shift tracking, rank updates, and LOA management.
+- **Utility:** Ping, dice roll, coin flip, reminders, trivia, guessing games, dice duels, and word scramble.
+- **Anti-Raid & Security:** Automatic and manual raid detection, soft/hard raid protection, and anti-nuke features.
+- **Automod:** Bad word filtering and admin action prompts.
+- **Verification:** CAPTCHA-based verification for new members.
+- **Statistics:** Live member/boost stats in channel names.
+- **Rich Presence:** Custom Discord rich presence (see `richpresence.py`).
 
-## Bot Prefix
+---
 
-The bot uses the prefix:
-```
-!
-```
-All commands must be prefixed with **"!"**.
+## Command Prefix
 
+All commands use the prefix: `!`
 
-----------------------------------------------------
+---
 
+## Commands Overview
 
+### Moderation
 
+- `!lock` / `!unlock` — Lock or unlock the current channel.
+- `!slowmode <seconds>` — Set slowmode for the current channel.
+- `!clear <number>` — Clear messages (confirmation for >10).
+- `!kick <member> [reason]` — Kick a user.
+- `!ban <member> [reason]` — Ban a user.
+- `!unban <username>` — Unban a user.
+- `!timeout <member> <minutes> [reason]` — Timeout a user.
+- `!mute <member> [reason]` / `!unmute <member>` — Mute or unmute a user.
+- `!loa <reason> <days>` — Request a Leave of Absence (LOA).
 
-# Commands
-## Moderation Commands
+### Tryout System
 
-Below is a list of all commands related to moderation. 
-*Note that you need specific permission to run each command*
+- `!tryoutstart` — Start a tryout session.
+- `!setcohost <tryout_id> <member>` — Assign a co-host.
+- `!endtryout <tryout_id>` — End the tryout.
+- `!addscore <tryout_id> <member> <points>` — Add points to a participant.
+- `!removescore <tryout_id> <member> <points>` — Remove points from a participant.
+- `!addscoreall <tryout_id> <points>` — Add points to all participants.
+- `!removescoreall <tryout_id> <points>` — Remove points from all participants.
+- `!showpoints <tryout_id>` — Show participant points.
+- `!approve <member_id>` — Approve a codename.
+- `!deny <member_id> <reason>` — Deny a codename.
+- `!helptt` — Show tryout commands (in tryout management channels).
 
------------------------------------------------------------
+### Ranking
 
-```
-!slowmode <seconds>
-```
-**Sets the slowmode for the current channel.**
-*Example: !slowmode 10 (sets slowmode to 10 seconds).*
+- `!startshift` — Start a shift (with DM controls).
+- `!points [member]` — Show points for a user.
+- `!addpoints <member> <amount>` — Add points (admin).
+- `!removepoints <member> <amount>` — Remove points (admin).
+- `!rankupd` — Update your rank roles based on points.
 
------------------------------------------------------------
+### Utility
 
-```
-!lock
-```
-**Locks the current channel, preventing members from sending messages.**
-*Example: !lock*
+- `!ping` — Show bot latency.
+- `!roll [NdN]` — Roll dice.
+- `!flip` — Flip a coin.
+- `!reminder <time> <reminder>` — Set a reminder.
+- `!trivia` — Play trivia.
+- `!guess` — Number guessing game.
+- `!dice_duel <opponent>` — Dice duel.
+- `!scramble` — Word scramble game.
 
------------------------------------------------------------
+### Anti-Raid & Security
 
-```
-!unlock
-```
-**Unlocks the current channel, restoring the default permissions.**
-*Example: !unlock*
+- `!manualraid` — Manually activate raid protection (admin).
+- `!testraid` — Test raid protection (admin).
 
------------------------------------------------------------
+### Automod
 
-```
-!clear <number>
-```
-**Clears a specified number of messages in the current channel (up to 100).**
-**If the number is greater than 10, the bot will ask for confirmation with buttons.**
-*Example: !clear 5 (clears 5 messages).*
+- Automatic bad word filtering and admin action prompts.
 
------------------------------------------------------------
+### Verification
 
-```
-!rank entree @user
-```
-**Assigns the Recruit and Official Member roles to a user and removes the Awaiting Tryout and Unofficial Personnel roles.*
-*Example: !rank entree @JohnDoe*
+- CAPTCHA verification for new members.
+- `!testcaptcha <member>` — Manually test CAPTCHA (admin).
 
------------------------------------------------------------
+### Statistics
 
-```
-!loa <reason> <time_in_days>
-```
-Allows a user with the Official Member role to request a Leave of Absence (LOA).
-Sends the request to a random administrator for approval or denial.
-Example: !loa Vacation 7 (requests a 7-day LOA for vacation).
+- `!forceupdate` — Force update stats channels (admin).
 
-## THE LOA COMMAND IS CURRENTLY WIP
+---
 
-#
+## Help System
+
+Use `!help` to see all commands you have access to, grouped by category.  
+Use `!help <category>` to see all commands in a category.  
+
+---
+
+## Database
+
+See [`database/README.md`](database/README.md) for setup and connection details.
+
+---
+
+## Notes
+
+- Some commands require specific Discord permissions or roles.
+- For advanced features (anti-nuke, activity reports, embed sending), see the `scraps/` directory.
+
+---
+
+## License
+
+This project is for private use by the Titan One SCP Faction Server.
